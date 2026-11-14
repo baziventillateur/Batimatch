@@ -1,0 +1,177 @@
+@import 'tailwindcss';
+@import '@fontsource/barlow/400.css';
+@import '@fontsource/barlow/500.css';
+@import '@fontsource/barlow/600.css';
+@import '@fontsource/barlow/700.css';
+@import '@fontsource/barlow-semi-condensed/400.css';
+@import '@fontsource/barlow-semi-condensed/500.css';
+@import '@fontsource/barlow-semi-condensed/600.css';
+@import '@fontsource/barlow-condensed/600.css';
+@import '@fontsource/barlow-condensed/700.css';
+
+/*
+  Batimatch — système visuel
+  Papier calque froid, encre de plan, et un seul geste fort : le surligneur jaune
+  qu'on passe sur le moins-disant d'un comparatif imprimé.
+*/
+@theme {
+  --color-paper: #f3f5f8;
+  --color-sheet: #ffffff;
+  --color-ink: #1b2a3a;
+  --color-ink-2: #46586a;
+  --color-ink-3: #75838f;
+  --color-line: #d3dbe3;
+  --color-line-2: #e6ebf0;
+  --color-plan: #2a5c8f;
+  --color-plan-dark: #1f4770;
+  --color-plan-soft: #e3edf7;
+  --color-marker: #f8e04e;
+  --color-good: #1d7344;
+  --color-good-soft: #e3f3ea;
+  --color-bad: #b42318;
+  --color-bad-soft: #fde8e6;
+  --color-warn: #995c00;
+  --color-warn-soft: #fdf1d8;
+
+  --color-s1: #2a78d6;
+  --color-s2: #eb6834;
+  --color-s3: #1baf7a;
+
+  --font-sans: 'Barlow', ui-sans-serif, system-ui, sans-serif;
+  --font-cond: 'Barlow Semi Condensed', 'Barlow', ui-sans-serif, sans-serif;
+  --font-title: 'Barlow Condensed', 'Barlow Semi Condensed', ui-sans-serif, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: 'tnum' 0;
+  }
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-plan);
+    outline-offset: 2px;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-marker) 70%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Chiffres alignés dans les tableaux */
+  .num {
+    font-family: var(--font-cond);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  /* Le surligneur : bord légèrement irrégulier, comme au feutre */
+  .marker {
+    background-image: linear-gradient(
+      100deg,
+      transparent 0.15em,
+      color-mix(in srgb, var(--color-marker) 92%, transparent) 0.3em,
+      color-mix(in srgb, var(--color-marker) 80%, transparent) 70%,
+      color-mix(in srgb, var(--color-marker) 95%, transparent) calc(100% - 0.35em),
+      transparent calc(100% - 0.1em)
+    );
+    background-size: 100% 78%;
+    background-position: 0 62%;
+    background-repeat: no-repeat;
+    padding: 0 0.3em;
+    margin: 0 -0.3em;
+    border-radius: 0.2em 0.4em 0.25em 0.5em;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .marker-strong {
+    background-size: 100% 92%;
+    background-position: 0 55%;
+  }
+
+  .field {
+    @apply w-full rounded-[5px] border border-line bg-sheet px-3 py-2 text-[15px] transition-colors;
+    @apply placeholder:text-ink-3 hover:border-ink-3 focus:border-plan focus:outline-none;
+  }
+  .field:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-plan) 18%, transparent);
+  }
+  .field-bare {
+    @apply w-full rounded-[4px] border border-transparent bg-transparent px-2 py-1.5;
+    @apply hover:border-line focus:border-plan focus:bg-sheet focus:outline-none;
+  }
+  .field-bare:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-plan) 15%, transparent);
+  }
+
+  /* Cartouche : bloc-titre inspiré des plans d'exécution */
+  .cartouche {
+    @apply border border-ink/80 bg-sheet;
+  }
+  .cartouche-cell {
+    @apply border-ink/25 px-4 py-3;
+  }
+  .cartouche-label {
+    @apply text-[12.5px] leading-tight text-ink-3;
+  }
+
+  .panel {
+    @apply rounded-md border border-line bg-sheet;
+  }
+
+  .tip {
+    @apply pointer-events-none fixed z-50 max-w-[280px] rounded-md bg-ink px-3 py-2 text-[13px] leading-snug text-white shadow-lg;
+  }
+
+  .scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+}
+
+dialog::backdrop {
+  background: rgb(27 42 58 / 0.45);
+}
+dialog[open] {
+  animation: pop 0.16s ease-out;
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media print {
+  body {
+    background: white;
+    font-size: 12px;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .panel {
+    break-inside: avoid;
+    border-color: #ccc;
+  }
+}
