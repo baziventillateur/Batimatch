@@ -1,4 +1,4 @@
-import type { AppData, Consultation } from './types'
+import type { Consultation } from './types'
 import { analyze, linesOf, offerLabel } from './calc'
 
 const slug = (s: string) =>
@@ -29,25 +29,6 @@ const cell = (v: string | number | null | undefined) => {
   return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 const toCsv = (rows: (string | number | null | undefined)[][]) => '﻿' + rows.map((r) => r.map(cell).join(';')).join('\r\n')
-
-export function exportJson(consultations: Consultation[], name = 'batimatch-sauvegarde') {
-  const data: AppData = { version: 1, consultations }
-  download(`${slug(name)}.json`, JSON.stringify(data, null, 2), 'application/json')
-}
-
-export function parseImport(text: string): Consultation[] {
-  const data = JSON.parse(text)
-  const list: unknown = Array.isArray(data) ? data : data?.consultations ?? (data?.items ? [data] : null)
-  if (!Array.isArray(list)) throw new Error('Fichier non reconnu : ce n’est pas une sauvegarde Batimatch.')
-  return list.map((c) => {
-    if (!c || typeof c !== 'object' || !('id' in c) || !Array.isArray((c as Consultation).items)) {
-      throw new Error('Fichier non reconnu : une consultation est incomplète.')
-    }
-    const x = c as Consultation
-    const defaults: Consultation['settings'] = { latestOnly: true, fillMode: 'median', priceWeight: 60, pseRetained: {} }
-    return { ...x, offers: x.offers ?? [], settings: Object.assign(defaults, x.settings ?? {}) }
-  })
-}
 
 /** DPGF vierge à transmettre aux entreprises */
 export function exportBlankDpgf(c: Consultation) {
@@ -95,8 +76,9 @@ export function exportComparison(c: Consultation) {
     ['Rang', (x) => x.rank || null],
     ['Délai (semaines)', (x) => x.offer.durationWeeks],
     ['Note prix /20', (x) => x.priceScore],
-    ['Note technique /20', (x) => x.techScore],
-    ['Note globale /20', (x) => x.globalScore],
+    ['Contact', (x) => [x.offer.contact.firstName, x.offer.contact.lastName].filter(Boolean).join(' ')],
+    ['Email', (x) => x.offer.contact.email],
+    ['Téléphone', (x) => x.offer.contact.phone],
     ['Réserves', (x) => x.offer.reserves],
   ]
   for (const [label, fn] of synth) {

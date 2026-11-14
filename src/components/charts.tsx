@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react'
-import type { Analysis, CompanyHistory, OfferResult } from '../lib/calc'
-import { fmtEur, fmtEurCompact, fmtNum, fmtPct, fmtPctSigned } from '../lib/format'
+import type { Analysis, CompanyHistory } from '../lib/calc'
+import { fmtEur, fmtEurCompact, fmtPct, fmtPctSigned } from '../lib/format'
 import { useTip, cx } from './ui'
 
 const S1 = 'var(--color-s1)'
@@ -111,58 +111,6 @@ function TipRows({ title, rows }: { title: string; rows: [string, number][] }) {
         </p>
       ))}
     </div>
-  )
-}
-
-// ————————————————————————— Note globale —————————————————————————
-
-export function ScoreChart({ results, priceWeight }: { results: OfferResult[]; priceWeight: number }) {
-  const { bind, node } = useTip()
-  const w = priceWeight / 100
-  const rows = [...results].filter((r) => r.priceScore != null).sort((x, y) => (y.globalScore ?? -1) - (x.globalScore ?? -1))
-  return (
-    <figure className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
-        <LegendKey color={S1}>Prix ({Math.round(priceWeight)} %)</LegendKey>
-        <LegendKey color={S3}>Technique ({Math.round(100 - priceWeight)} %)</LegendKey>
-      </div>
-      <ol className="flex flex-col gap-3">
-        {rows.map((r) => {
-          const p = w * (r.priceScore ?? 0)
-          const t = r.techScore != null ? (1 - w) * r.techScore : 0
-          return (
-            <li key={r.offer.id} className="grid gap-1">
-              <div className="flex items-baseline justify-between gap-3 text-[14.5px]">
-                <span className={cx('min-w-0 truncate', r.scoreRank === 1 && 'font-semibold')}>{r.label}</span>
-                <span className={cx('num font-semibold', r.scoreRank === 1 && 'marker')}>
-                  {r.globalScore != null ? `${fmtNum(Math.round(r.globalScore * 100) / 100)} / 20` : 'note technique manquante'}
-                </span>
-              </div>
-              <div
-                {...bind(
-                  <div>
-                    <p className="mb-1 font-semibold">{r.label}</p>
-                    <p className="flex justify-between gap-4">
-                      <span className="text-white/75">Note prix</span>
-                      <strong className="num">{fmtNum(Math.round((r.priceScore ?? 0) * 100) / 100)} / 20</strong>
-                    </p>
-                    <p className="flex justify-between gap-4">
-                      <span className="text-white/75">Note technique</span>
-                      <strong className="num">{r.techScore != null ? `${fmtNum(r.techScore)} / 20` : 'non saisie'}</strong>
-                    </p>
-                  </div>,
-                )}
-                className="flex h-3 gap-[2px] rounded-[4px] bg-line-2/70 outline-none"
-              >
-                <span className="h-full rounded-l-[4px] last:rounded-r-[4px]" style={{ width: `${(p / 20) * 100}%`, background: S1 }} />
-                {t > 0 && <span className="h-full rounded-r-[4px]" style={{ width: `${(t / 20) * 100}%`, background: S3 }} />}
-              </div>
-            </li>
-          )
-        })}
-      </ol>
-      {node}
-    </figure>
   )
 }
 

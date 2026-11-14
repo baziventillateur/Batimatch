@@ -1,4 +1,5 @@
-import type { Consultation, DpgfItem, Offer, PriceValue } from './types'
+import type { Consultation, DpgfItem, Offer, PriceValue, Review } from './types'
+import { DEFAULT_CRITERIA } from './types'
 import { newConsultation, newItem, newOffer } from '../store'
 import { uid } from './id'
 
@@ -49,7 +50,13 @@ function rng(seed: number) {
 
 const round = (v: number) => (v >= 100 ? Math.round(v) : Math.round(v * 100) / 100)
 
-export function buildDemo(): Consultation {
+export interface DemoBundle {
+  consultation: Consultation
+  reviews: Review[]
+  comments: { offerId: string; body: string }[]
+}
+
+export function buildDemo(): DemoBundle {
   const items: DpgfItem[] = ROWS.map(([ref, label, unit, qty, , scope]) =>
     unit
       ? newItem({ ref, label, unit, qty: qty ?? null, scope: scope ?? 'base' })
@@ -87,9 +94,9 @@ export function buildDemo(): Consultation {
     prices: priceSet(11, 1.04, 0.08, { '4.3': 17.6, '4.2': 22.4 }),
     durationWeeks: 14,
     validUntil: d(60),
-    techScore: 16,
+    contact: { firstName: 'Claire', lastName: 'Morel', email: 'c.morel@tp-valdeseine.example', phone: '01 39 00 00 01' },
     reserves: '',
-    notes: 'Mémoire technique solide, conducteur de travaux dédié.',
+    message: 'Conducteur de travaux dédié, démarrage possible sous 3 semaines.',
     extras: [
       { id: uid(), kind: 'variante', label: 'Enrobé avec 20 % d’agrégats recyclés (performances identiques)', amount: -6200, retained: false },
       { id: uid(), kind: 'option', label: 'Entretien des espaces verts pendant 1 an', amount: 4800, retained: false },
@@ -103,7 +110,7 @@ export function buildDemo(): Consultation {
     prices: Object.fromEntries(Object.entries(a1.prices).map(([k, v]) => [k, typeof v === 'number' ? round(v * 0.965) : v])),
     discountPct: 1,
     extras: a1.extras.map((e) => ({ ...e, id: uid() })),
-    notes: 'Offre après réunion de négociation.',
+    message: 'Offre après réunion de négociation.',
   })
   const b: Offer = newOffer({
     company: 'Réseaux Île-de-France',
@@ -112,9 +119,8 @@ export function buildDemo(): Consultation {
     prices: priceSet(29, 0.95, 0.12, { '3.5': null, '5.3': null, '2.3': 31.5, '3.3': 1180 }),
     durationWeeks: 12,
     validUntil: d(-2),
-    techScore: 13,
+    contact: { firstName: 'Karim', lastName: 'Benali', email: 'k.benali@reseaux-idf.example', phone: '01 30 00 00 02' },
     reserves: 'Bassin de rétention exclu (attente étude de sol G2 PRO). Évacuation chiffrée en ISDI uniquement : tout classement ISDI+ en plus-value.',
-    notes: '',
   })
   const c: Offer = newOffer({
     company: 'Bitumes & Bordures',
@@ -123,21 +129,33 @@ export function buildDemo(): Consultation {
     prices: priceSet(47, 1.02, 0.1, { '1.2': 'inclus', '4.3': 15.8, '4.4': 36, '3.1': 128, '3.2': 158 }),
     durationWeeks: 16,
     validUntil: d(45),
-    techScore: 14,
+    contact: { firstName: 'Julie', lastName: 'Lefèvre', email: 'j.lefevre@bitumes-bordures.example', phone: '01 34 00 00 03' },
     reserves: '',
-    notes: '',
     extras: [{ id: uid(), kind: 'variante', label: 'Bordures granit en remplacement des bordures béton T2', amount: 9400, retained: false }],
   })
 
-  return newConsultation({
+  const consultation = newConsultation({
     name: 'Lot VRD',
-    affaire: '24-017 – Paris 17e Résidence des Tilleuls',
+    affaire: 'Exemple – Logements Paris 17e',
     lot: 'Lot 01 – VRD',
     dueDate: d(-14),
     budget: 375000,
     description: 'Exemple de démonstration : entreprises et montants fictifs.',
     items,
     offers: [a1, b, c, a2],
-    settings: { latestOnly: true, fillMode: 'median', priceWeight: 60, pseRetained: { [byRef('PSE 1')]: true } },
+    settings: { latestOnly: true, fillMode: 'median', pseRetained: { [byRef('PSE 1')]: true }, extrasRetained: {}, criteria: DEFAULT_CRITERIA },
   })
+  return {
+    consultation,
+    reviews: [
+      { offerId: a2.id, scores: { tech: 16 }, verdict: 'favori' },
+      { offerId: b.id, scores: { tech: 12 }, verdict: null },
+      { offerId: c.id, scores: { tech: 14.5 }, verdict: 'negocier' },
+    ],
+    comments: [
+      { offerId: a2.id, body: 'Mémoire technique solide, conducteur de travaux dédié. Références VRD comparables en Yvelines.' },
+      { offerId: c.id, body: 'Réseaux chers : demander le détail des canalisations EU/EP avant de conclure.' },
+      { offerId: b.id, body: 'Bassin exclu et offre expirée : relancer pour une offre complète.' },
+    ],
+  }
 }

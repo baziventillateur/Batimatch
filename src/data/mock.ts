@@ -1,0 +1,314 @@
+// Backend de démonstration en mémoire (stocké dans le navigateur), qui reproduit
+// les règles d'accès de la base Supabase. Sert au développement et aux tests visuels.
+import type { Backend, OfferLite } from './backend'
+import type { CommentRow, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import { uid } from '../lib/id'
+
+interface Db {
+  users: { id: string; email: string; password: string }[]
+  profiles: ProfileRow[]
+  projects: ProjectRow[]
+  members: MemberRow[]
+  lots: LotRow[]
+  privates: LotPrivateRow[]
+  offers: OfferRow[]
+  reviews: ReviewRow[]
+  comments: CommentRow[]
+  session: string | null
+}
+
+const KEY = 'batimatch:mock'
+const empty = (): Db => ({ users: [], profiles: [], projects: [], members: [], lots: [], privates: [], offers: [], reviews: [], comments: [], session: null })
+
+function load(): Db {
+  try {
+    const raw = localStorage.getItem(KEY)
+    return raw ? { ...empty(), ...JSON.parse(raw) } : empty()
+  } catch {
+    return empty()
+  }
+}
+
+export function createMockBackend(): Backend {
+  let db = load()
+  const listeners = new Set<(id: string | null) => void>()
+  const save = () => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(db))
+    } catch {
+      /* stockage indisponible : on reste en mémoire */
+    }
+  }
+  const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v))
+  const now = () => new Date().toISOString()
+  const today = () => new Date().toISOString().slice(0, 10)
+  const me = () => {
+    if (!db.session) throw new Error('Session expirée : reconnectez-vous.')
+    return db.session
+  }
+  const isOwner = (pid: string) => db.projects.some((p) => p.id === pid && p.owner_id === db.session)
+  const isMember = (pid: string) => db.members.some((m) => m.project_id === pid && m.user_id === db.session)
+  const lotProject = (lid: string) => db.lots.find((l) => l.id === lid)?.project_id ?? ''
+  const lotOpen = (lid: string) => {
+    const l = db.lots.find((x) => x.id === lid)
+    return !!l && (!l.due_date || l.due_date >= today())
+  }
+  const canSeeOffer = (o: OfferRow) => o.company_id === db.session || (isOwner(lotProject(o.lot_id)) && (o.status === 'submitted' || o.source === 'manual'))
+  const delay = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(v), 60))
+  const deny = () => {
+    throw new Error('new row violates row-level security policy')
+  }
+  const code = () => {
+    const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+    let c = ''
+    do {
+      c = Array.from({ length: 6 }, () => a[Math.floor(Math.random() * a.length)]).join('')
+    } while (db.projects.some((p) => p.access_code === c))
+    return c
+  }
+
+  return {
+    kind: 'mock',
+
+    async getUserId() {
+      return db.session
+    },
+    onAuthChange(cb) {
+      listeners.add(cb)
+      return () => listeners.delete(cb)
+    },
+    async signUp(i) {
+      if (db.users.some((u) => u.email.toLowerCase() === i.email.toLowerCase())) throw new Error('User already registered')
+      if (i.password.length < 6) throw new Error('Password should be at least 6 characters')
+      const id = uid()
+      db.users.push({ id, email: i.email, password: i.password })
+      db.profiles.push({ id, role: i.role, email: i.email, first_name: i.firstName, last_name: i.lastName, company_name: i.companyName, phone: i.phone, logo_url: null })
+      db.session = id
+      save()
+      listeners.forEach((l) => l(id))
+      return delay({ needsConfirmation: false })
+    },
+    async signIn(email, password) {
+      const u = db.users.find((x) => x.email.toLowerCase() === email.toLowerCase() && x.password === password)
+      if (!u) throw new Error('Invalid login credentials')
+      db.session = u.id
+      save()
+      listeners.forEach((l) => l(u.id))
+      await delay(null)
+    },
+    async signOut() {
+      db.session = null
+      save()
+      listeners.forEach((l) => l(null))
+    },
+    async resetPassword() {
+      await delay(null)
+    },
+
+    onPasswordRecovery() {
+      return () => {}
+    },
+    async updatePassword() {
+      await delay(null)
+    },
+
+    async getProfile(id) {
+      const p = db.profiles.find((x) => x.id === id)
+      if (!p) return null
+      const visible =
+        id === db.session ||
+        db.members.some((m) => m.user_id === id && isOwner(m.project_id)) ||
+        db.projects.some((pr) => pr.owner_id === id && isMember(pr.id))
+      return delay(visible ? clone(p) : null)
+    },
+    async updateProfile(id, patch) {
+      if (id !== me()) deny()
+      let p = db.profiles.find((x) => x.id === id)
+      if (!p) {
+        p = { id, role: 'company', email: db.users.find((u) => u.id === id)?.email ?? '', first_name: '', last_name: '', company_name: '', phone: '', logo_url: null }
+        db.profiles.push(p)
+      }
+      Object.assign(p, patch)
+      save()
+      return delay(clone(p))
+    },
+    async uploadImage(_userId, _path, file) {
+      // En démonstration, l'image est conservée en data URL
+      return new Promise<string>((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(String(r.result))
+        r.onerror = () => reject(r.error)
+        r.readAsDataURL(file)
+      })
+    },
+
+    async listProjects() {
+      const uidMe = me()
+      const projects = db.projects.filter((p) => p.owner_id === uidMe || isMember(p.id)).sort((a, b) => b.created_at.localeCompare(a.created_at))
+      return delay(
+        projects.map((project) => {
+          const lots = db.lots.filter((l) => l.project_id === project.id).sort((a, b) => a.position - b.position)
+          const ids = new Set(lots.map((l) => l.id))
+          return {
+            project: clone(project),
+            lots: lots.map(({ id, name, code, due_date }) => ({ id, name, code, due_date })),
+            offers: db.offers.filter((o) => ids.has(o.lot_id) && canSeeOffer(o)).map(({ id, lot_id, status, company_id }) => ({ id, lot_id, status, company_id })),
+          }
+        }),
+      )
+    },
+    async createProject(input) {
+      const row: ProjectRow = { id: uid(), owner_id: me(), access_code: code(), created_at: now(), ...input }
+      db.projects.push(row)
+      save()
+      return delay(clone(row))
+    },
+    async updateProject(id, patch) {
+      if (!isOwner(id)) deny()
+      Object.assign(db.projects.find((p) => p.id === id)!, patch)
+      save()
+    },
+    async deleteProject(id) {
+      if (!isOwner(id)) deny()
+      const lots = new Set(db.lots.filter((l) => l.project_id === id).map((l) => l.id))
+      db.projects = db.projects.filter((p) => p.id !== id)
+      db.members = db.members.filter((m) => m.project_id !== id)
+      db.lots = db.lots.filter((l) => !lots.has(l.id))
+      db.privates = db.privates.filter((p) => !lots.has(p.lot_id))
+      db.offers = db.offers.filter((o) => !lots.has(o.lot_id))
+      db.reviews = db.reviews.filter((r) => !lots.has(r.lot_id))
+      db.comments = db.comments.filter((c) => !lots.has(c.lot_id))
+      save()
+    },
+    async getProject(id) {
+      const project = db.projects.find((p) => p.id === id)
+      if (!project || !(isOwner(id) || isMember(id))) throw new Error('Projet introuvable.')
+      const owner = isOwner(id)
+      const lots = db.lots.filter((l) => l.project_id === id).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+      const ids = new Set(lots.map((l) => l.id))
+      const members = db.members.filter((m) => m.project_id === id && (owner || m.user_id === db.session))
+      return delay(
+        clone({
+          project,
+          owner: db.profiles.find((p) => p.id === project.owner_id) ?? null,
+          lots,
+          privates: owner ? db.privates.filter((p) => ids.has(p.lot_id)) : [],
+          offers: db.offers
+            .filter((o) => ids.has(o.lot_id) && canSeeOffer(o))
+            .map((o): OfferLite => ({
+              id: o.id, lot_id: o.lot_id, company_id: o.company_id, source: o.source, status: o.status, company_name: o.company_name,
+              logo_url: o.logo_url, submitted_at: o.submitted_at, updated_at: o.updated_at, version: o.version, prices: o.prices, discount_pct: o.discount_pct,
+            })),
+          members: members.map((m) => ({ ...m, profile: db.profiles.find((p) => p.id === m.user_id) ?? null })),
+        }),
+      )
+    },
+    async joinProject(c) {
+      const uidMe = me()
+      const p = db.projects.find((x) => x.access_code === c.trim().toUpperCase().replace(/\s/g, ''))
+      if (!p) throw new Error('Code inconnu : vérifiez le code transmis par l’acheteur.')
+      if (p.owner_id !== uidMe && !isMember(p.id)) db.members.push({ project_id: p.id, user_id: uidMe, joined_at: now() })
+      save()
+      return delay(p.id)
+    },
+    async removeMember(projectId, userId) {
+      if (!(isOwner(projectId) || userId === db.session)) deny()
+      db.members = db.members.filter((m) => !(m.project_id === projectId && m.user_id === userId))
+      save()
+    },
+
+    async createLot(input) {
+      if (!isOwner(input.project_id)) deny()
+      const row: LotRow = { id: input.id ?? uid(), created_at: now(), updated_at: now(), ...input }
+      db.lots.push(row)
+      save()
+      return delay(clone(row))
+    },
+    async updateLot(id, patch) {
+      if (!isOwner(lotProject(id))) deny()
+      Object.assign(db.lots.find((l) => l.id === id)!, patch, { updated_at: now() })
+      save()
+    },
+    async deleteLot(id) {
+      if (!isOwner(lotProject(id))) deny()
+      db.lots = db.lots.filter((l) => l.id !== id)
+      db.privates = db.privates.filter((p) => p.lot_id !== id)
+      db.offers = db.offers.filter((o) => o.lot_id !== id)
+      db.reviews = db.reviews.filter((r) => r.lot_id !== id)
+      db.comments = db.comments.filter((c) => c.lot_id !== id)
+      save()
+    },
+    async upsertLotPrivate(row) {
+      if (!isOwner(lotProject(row.lot_id))) deny()
+      db.privates = [...db.privates.filter((p) => p.lot_id !== row.lot_id), clone(row)]
+      save()
+    },
+    async getLot(id) {
+      const lot = db.lots.find((l) => l.id === id)
+      if (!lot) throw new Error('Lot introuvable.')
+      const pid = lot.project_id
+      const owner = isOwner(pid)
+      if (!owner && !isMember(pid)) throw new Error('Lot introuvable.')
+      return delay(
+        clone({
+          project: db.projects.find((p) => p.id === pid)!,
+          lot,
+          priv: owner ? (db.privates.find((p) => p.lot_id === id) ?? null) : null,
+          offers: db.offers.filter((o) => o.lot_id === id && canSeeOffer(o)),
+          reviews: owner ? db.reviews.filter((r) => r.lot_id === id) : [],
+          comments: owner ? db.comments.filter((c) => c.lot_id === id) : [],
+        }),
+      )
+    },
+
+    async upsertOffer(row) {
+      const uidMe = me()
+      const existing = db.offers.find((o) => o.id === row.id)
+      const pid = lotProject(row.lot_id)
+      const ok =
+        (row.source === 'platform' && row.company_id === uidMe && isMember(pid) && lotOpen(row.lot_id)) ||
+        (row.source === 'manual' && row.company_id === null && isOwner(pid))
+      if (!ok) deny()
+      if (existing) {
+        const canUpdate = (existing.source === 'platform' && existing.company_id === uidMe && lotOpen(existing.lot_id)) || (existing.source === 'manual' && isOwner(pid))
+        if (!canUpdate) deny()
+        Object.assign(existing, clone(row), { updated_at: now() })
+      } else {
+        if (row.source === 'platform' && db.offers.some((o) => o.source === 'platform' && o.lot_id === row.lot_id && o.company_id === uidMe)) {
+          throw new Error('duplicate key value violates unique constraint "offers_one_per_company"')
+        }
+        db.offers.push({ ...clone(row), updated_at: now() })
+      }
+      save()
+      await delay(null)
+    },
+    async deleteOffer(id) {
+      const o = db.offers.find((x) => x.id === id)
+      if (!o) return
+      const ok = (o.source === 'manual' && isOwner(lotProject(o.lot_id))) || (o.company_id === db.session && o.status === 'draft')
+      if (!ok) deny()
+      db.offers = db.offers.filter((x) => x.id !== id)
+      db.reviews = db.reviews.filter((r) => r.offer_id !== id)
+      db.comments = db.comments.filter((c) => c.offer_id !== id)
+      save()
+    },
+    async upsertReview(row) {
+      if (!isOwner(lotProject(row.lot_id))) deny()
+      db.reviews = [...db.reviews.filter((r) => r.offer_id !== row.offer_id), clone(row)]
+      save()
+    },
+    async addComment(row) {
+      if (!isOwner(lotProject(row.lot_id))) deny()
+      const c: CommentRow = { ...row, id: uid(), author_id: db.session, created_at: now() }
+      db.comments.push(c)
+      save()
+      return delay(clone(c))
+    },
+    async deleteComment(id) {
+      const c = db.comments.find((x) => x.id === id)
+      if (c && !isOwner(lotProject(c.lot_id))) deny()
+      db.comments = db.comments.filter((x) => x.id !== id)
+      save()
+    },
+  }
+}

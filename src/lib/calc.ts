@@ -156,10 +156,8 @@ export interface OfferResult {
   vsAverage: number | null
   vsBudget: number | null
   vsBudgetAmount: number | null
+  /** Note prix proportionnelle sur 20 : 20 × offre la plus basse ÷ offre */
   priceScore: number | null
-  techScore: number | null
-  globalScore: number | null
-  scoreRank: number | null
   chapterTotals: Record<string, number>
   anomalies: number
 }
@@ -220,7 +218,8 @@ export interface Analysis {
 export function analyze(c: Consultation): Analysis {
   const offers = activeOffers(c)
   const lines = linesOf(c.items)
-  const { fillMode, pseRetained, priceWeight } = c.settings
+  const { fillMode, pseRetained } = c.settings
+  const extrasRetained = c.settings.extrasRetained ?? {}
 
   // — Statistiques ligne à ligne —
   const lineStats: LineStat[] = lines.map(({ item, chapterId, chapterLabel }) => {
@@ -294,7 +293,7 @@ export function analyze(c: Consultation): Analysis {
     const discount = declared * ((o.discountPct || 0) / 100)
     const baseComparable = declared - discount + fill
     const pse = sum(retainedPse.map((l) => (l.cells[idx].amount ?? 0) + l.cells[idx].filled))
-    const extras = sum(o.extras.filter((e) => e.retained).map((e) => e.amount))
+    const extras = sum(o.extras.filter((e) => extrasRetained[e.id] ?? e.retained).map((e) => e.amount))
     const total = baseComparable + pse + extras
     return {
       offer: o,
@@ -316,9 +315,6 @@ export function analyze(c: Consultation): Analysis {
       vsBudget: null,
       vsBudgetAmount: null,
       priceScore: null,
-      techScore: o.techScore,
-      globalScore: null,
-      scoreRank: null,
       chapterTotals,
       anomalies,
     }
@@ -340,13 +336,7 @@ export function analyze(c: Consultation): Analysis {
     r.vsBudgetAmount = budget ? r.total - budget : null
     // Note prix proportionnelle : 20 × Pmin / P
     r.priceScore = best && r.total > 0 ? (20 * best.total) / r.total : null
-    const w = Math.min(100, Math.max(0, priceWeight)) / 100
-    if (r.priceScore != null) {
-      r.globalScore = r.techScore != null ? w * r.priceScore + (1 - w) * r.techScore : null
-    }
   }
-  const scored = ranked.filter((r) => r.globalScore != null).sort((a, b) => (b.globalScore ?? 0) - (a.globalScore ?? 0))
-  scored.forEach((r, i) => (r.scoreRank = i + 1))
 
   // — Chapitres —
   const chapterMap = new Map<string, ChapterStat>()

@@ -453,3 +453,103 @@ export function DeviationChip({ value, strong }: { value: number | null; strong?
     </span>
   )
 }
+
+// ————————————————————————— Logo d'entreprise —————————————————————————
+
+const LOGO_TINTS = ['#dbe7f4', '#f9e3d6', '#d9f0e6', '#f6ecc9', '#f3dce6', '#e2e0f6']
+
+/** Logo de l'entreprise, ou ses initiales sur une pastille si aucun logo n'est fourni */
+export function CompanyLogo({ name, url, size = 36, className }: { name: string; url?: string | null; size?: number; className?: string }) {
+  const [broken, setBroken] = useState(false)
+  const initials =
+    name
+      .replace(/[^\p{L}\p{N}\s&-]/gu, '')
+      .split(/[\s&-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase())
+      .join('') || '?'
+  const tint = LOGO_TINTS[[...name].reduce((s, ch) => s + ch.charCodeAt(0), 0) % LOGO_TINTS.length]
+  const style = { width: size, height: size, minWidth: size }
+  if (url && !broken) {
+    return (
+      <span className={cx('inline-flex items-center justify-center overflow-hidden rounded-[6px] border border-line bg-white', className)} style={style}>
+        <img src={url} alt={`Logo ${name}`} className="h-full w-full object-contain p-[3px]" onError={() => setBroken(true)} />
+      </span>
+    )
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className={cx('inline-flex items-center justify-center rounded-[6px] font-title font-bold text-ink/80', className)}
+      style={{ ...style, background: tint, fontSize: Math.max(11, size * 0.38) }}
+    >
+      {initials}
+    </span>
+  )
+}
+
+// ————————————————————————— Nombre animé —————————————————————————
+
+/** Compte jusqu'à la valeur en ~0,7 s (sauf si l'utilisateur préfère réduire les animations) */
+export function AnimatedNumber({ value, format, duration = 700 }: { value: number; format: (v: number) => string; duration?: number }) {
+  const [shown, setShown] = useState(value)
+  const from = useRef(value)
+  useEffect(() => {
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const start = from.current
+    if (reduce || start === value) {
+      from.current = value
+      setShown(value)
+      return
+    }
+    let raf = 0
+    const t0 = performance.now()
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / duration)
+      const eased = 1 - Math.pow(1 - k, 3)
+      setShown(start + (value - start) * eased)
+      if (k < 1) raf = requestAnimationFrame(step)
+      else from.current = value
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [value, duration])
+  return <>{format(shown)}</>
+}
+
+// ————————————————————————— Divers —————————————————————————
+
+export function Spinner({ className }: { className?: string }) {
+  return <span className={cx('inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent', className)} aria-hidden="true" />
+}
+
+export function Loading({ label = 'Chargement' }: { label?: string }) {
+  return (
+    <div className="flex items-center justify-center gap-3 py-16 text-ink-2" role="status">
+      <Spinner /> {label}…
+    </div>
+  )
+}
+
+export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-bad/30 bg-bad-soft px-4 py-3 text-[14.5px] text-bad" role="alert">
+      <span>{message}</span>
+      {onRetry && (
+        <Button size="sm" onClick={onRetry}>
+          Réessayer
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/** Petit texte de compte à rebours vers la date de rendu */
+export function dueLabel(days: number | null): { text: string; tone: 'muted' | 'warn' | 'closed' } {
+  if (days == null) return { text: 'sans date limite', tone: 'muted' }
+  if (days < 0) return { text: `clôturé depuis ${-days} j`, tone: 'closed' }
+  if (days === 0) return { text: 'clôture ce soir', tone: 'warn' }
+  if (days === 1) return { text: 'clôture demain', tone: 'warn' }
+  return { text: `J−${days}`, tone: days <= 3 ? 'warn' : 'muted' }
+}

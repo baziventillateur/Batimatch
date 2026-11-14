@@ -8,8 +8,8 @@ import { companyColor, DIVERGING, divergingColor } from '../lib/colors'
 import { fmtDate, fmtEur, fmtEurCompact, fmtEurSigned, fmtNum, fmtPct, fmtPctSigned, todayIso } from '../lib/format'
 import { exportComparison } from '../lib/io'
 import type { Consultation, FillMode } from '../lib/types'
-import { Button, EmptyState, Segmented, Toggle, cx, useTip } from '../components/ui'
-import { ParetoList, RankingChart, ScoreChart, VersionChart } from '../components/charts'
+import { Button, CompanyLogo, EmptyState, Segmented, Toggle, cx, useTip } from '../components/ui'
+import { ParetoList, RankingChart, VersionChart } from '../components/charts'
 
 export default function CompareTab() {
   const c = useC()
@@ -35,7 +35,6 @@ export default function CompareTab() {
   }
 
   const awarded = a.offers.find((r) => r.offer.id === c.awardedOfferId)
-  const hasTech = a.ranked.some((r) => r.techScore != null)
 
   return (
     <div className="flex flex-col gap-5">
@@ -52,7 +51,9 @@ export default function CompareTab() {
             {fmtEur((awarded ?? a.best)!.total)} <span className="text-[16px] font-normal text-ink-2">HT</span>
           </p>
           <Verdict a={a} awarded={awarded} />
-          <AwardControl c={c} a={a} />
+          <Link to="../decision" relative="path" className="no-print mt-2 inline-flex w-fit items-center gap-2 rounded-[5px] bg-plan px-3.5 py-2 font-medium text-white hover:bg-plan-dark">
+            <Trophy size={16} /> {awarded ? 'Voir la décision' : 'Passer à la décision'}
+          </Link>
         </div>
         <RankingChart a={a} awardedId={c.awardedOfferId} />
       </section>
@@ -98,18 +99,9 @@ export default function CompareTab() {
         <Section title="Points de vigilance" subtitle="Repérés automatiquement dans les offres.">
           <Insights items={a.insights} />
         </Section>
-        {hasTech ? (
-          <Section
-            title="Note globale"
-            subtitle={`Note prix = 20 × offre la plus basse ÷ offre. Pondération prix ${Math.round(c.settings.priceWeight)} %, technique ${Math.round(100 - c.settings.priceWeight)} %.`}
-          >
-            <ScoreChart results={a.ranked} priceWeight={c.settings.priceWeight} />
-          </Section>
-        ) : (
-          <Section title="Postes qui pèsent le plus" subtitle={paretoSubtitle(a)}>
-            <ParetoList a={a} />
-          </Section>
-        )}
+        <Section title="Postes qui pèsent le plus" subtitle={paretoSubtitle(a)}>
+          <ParetoList a={a} />
+        </Section>
       </div>
 
       <Section title="Synthèse par entreprise" subtitle="Les colonnes suivent le classement. Le total compare les offres sur la même base." flush>
@@ -125,11 +117,6 @@ export default function CompareTab() {
       </Section>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        {hasTech && (
-          <Section title="Postes qui pèsent le plus" subtitle={paretoSubtitle(a)}>
-            <ParetoList a={a} />
-          </Section>
-        )}
         {a.histories.length > 0 && (
           <Section title="Évolution des offres" subtitle="Base nette de chaque version, toutes versions confondues.">
             <VersionChart histories={a.histories} colorOf={colorOf} />
@@ -179,25 +166,6 @@ function SettingsBar({ c, a, onChange }: { c: Consultation; a: Analysis; onChang
               ]}
             />
           </div>
-        )}
-        {a.ranked.some((r) => r.techScore != null) && (
-          <label className="grid min-w-[220px] gap-1.5">
-            <span className="flex justify-between text-[13px] text-ink-2">
-              <span>Poids du prix</span>
-              <span className="num font-medium text-ink">
-                {Math.round(s.priceWeight)} % prix, {Math.round(100 - s.priceWeight)} % technique
-              </span>
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={s.priceWeight}
-              onChange={(e) => onChange({ priceWeight: Number(e.target.value) })}
-              className="accent-plan"
-            />
-          </label>
         )}
         <div className="ml-auto flex gap-2">
           <Button size="sm" icon={<Download size={15} />} onClick={() => exportComparison(c)}>
@@ -278,40 +246,6 @@ function Verdict({ a, awarded }: { a: Analysis; awarded?: OfferResult }) {
   )
 }
 
-function AwardControl({ c, a }: { c: Consultation; a: Analysis }) {
-  const update = useStore((s) => s.updateConsultation)
-  const [choice, setChoice] = useState(c.awardedOfferId ?? a.best?.offer.id ?? '')
-  if (c.awardedOfferId && a.offers.some((r) => r.offer.id === c.awardedOfferId)) {
-    return (
-      <div className="no-print mt-1 flex flex-wrap items-center gap-3">
-        <span className="inline-flex items-center gap-1.5 text-[14px] font-medium text-good">
-          <Trophy size={16} /> Décision enregistrée
-        </span>
-        <Button size="sm" variant="ghost" onClick={() => update(c.id, { awardedOfferId: null })}>
-          Annuler la décision
-        </Button>
-      </div>
-    )
-  }
-  return (
-    <div className="no-print mt-2 flex flex-wrap items-center gap-2 border-t border-line-2 pt-4">
-      <label htmlFor="award" className="sr-only">
-        Offre à retenir
-      </label>
-      <select id="award" className="field h-9 w-auto max-w-full py-1 text-[14px]" value={choice} onChange={(e) => setChoice(e.target.value)}>
-        {a.ranked.map((r) => (
-          <option key={r.offer.id} value={r.offer.id}>
-            {r.rank}. {r.label}, {fmtEur(r.total)}
-          </option>
-        ))}
-      </select>
-      <Button size="sm" variant="primary" icon={<Trophy size={15} />} disabled={!choice} onClick={() => update(c.id, { awardedOfferId: choice })}>
-        Retenir cette offre
-      </Button>
-    </div>
-  )
-}
-
 // ————————————————————————— Briques de mise en page —————————————————————————
 
 function Section({ title, subtitle, children, flush }: { title: string; subtitle?: string; children: ReactNode; flush?: boolean }) {
@@ -373,8 +307,9 @@ function Insights({ items }: { items: Insight[] }) {
 function CompanyHead({ r, color }: { r: OfferResult; color: string }) {
   return (
     <span className="flex items-center justify-end gap-1.5">
-      <span className="size-2.5 shrink-0 rounded-[2px]" style={{ background: color }} aria-hidden="true" />
+      <CompanyLogo name={r.offer.company || '?'} url={r.offer.logoUrl} size={22} />
       <span className={cx('truncate', r.rank === 1 && 'font-semibold text-ink')}>{r.label}</span>
+      <span className="size-2 shrink-0 rounded-[2px]" style={{ background: color }} aria-hidden="true" />
     </span>
   )
 }
@@ -422,8 +357,7 @@ function SummaryTable({ c, a, colorOf }: { c: Consultation; a: Analysis; colorOf
           '—'
         ),
     },
-    { label: 'Note technique', render: (r) => (r.techScore != null ? `${fmtNum(r.techScore)} / 20` : '—') },
-    { label: 'Note globale', render: (r) => (r.globalScore != null ? `${fmtNum(Math.round(r.globalScore * 100) / 100)} / 20` : '—') },
+    { label: 'Note prix', render: (r) => (r.priceScore != null ? `${fmtNum(Math.round(r.priceScore * 100) / 100)} / 20` : '—') },
     {
       label: 'Réserves',
       wrap: true,

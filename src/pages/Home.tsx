@@ -1,39 +1,50 @@
-import { useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Copy, Download, FileUp, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
-import { newConsultation, useStore } from '../store'
-import { analyze, companyKey, linesOf, statusOf, STATUS_LABEL, type ConsultationStatus } from '../lib/calc'
-import { daysUntil, fmtDate, fmtEur, fmtPctSigned } from '../lib/format'
-import { buildDemo } from '../lib/demo'
-import { exportJson, parseImport } from '../lib/io'
-import { ConsultationForm } from '../components/ConsultationForm'
-import { Button, Menu, MenuItem, cx } from '../components/ui'
-import type { Consultation } from '../lib/types'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, KeyRound, Plus, Sparkles } from 'lucide-react'
+import { api, errorMessage } from '../data'
+import { pendingCode, useAuth } from '../data/auth'
+import type { ProjectListItem } from '../data/backend'
+import { seedDemoProject } from '../data/seed'
+import { daysUntil, fmtDate } from '../lib/format'
+import { Button, Dialog, EmptyState, ErrorBox, Field, Loading, Spinner, cx } from '../components/ui'
 
 export default function Home() {
-  const consultations = useStore((s) => s.consultations)
-  const add = useStore((s) => s.addConsultation)
-  const remove = useStore((s) => s.removeConsultation)
-  const duplicate = useStore((s) => s.duplicateConsultation)
-  const merge = useStore((s) => s.mergeConsultations)
+  const { profile } = useAuth()
+  const [items, setItems] = useState<ProjectListItem[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setError(null)
+    try {
+      setItems(await api.listProjects())
+    } catch (e) {
+      setError(errorMessage(e))
+    }
+  }, [])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  if (!profile) return null
+  return profile.role === 'buyer' ? <BuyerHome items={items} error={error} reload={load} /> : <CompanyHome items={items} error={error} reload={load} />
+}
+
+// ————————————————————————— Acheteur —————————————————————————
+
+function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; error: string | null; reload: () => void }) {
   const nav = useNavigate()
   const [creating, setCreating] = useState(false)
-  const [importError, setImportError] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [seeding, setSeeding] = useState(false)
 
-  const openDemo = () => {
-    const demo = buildDemo()
-    add(demo)
-    nav(`/c/${demo.id}/comparatif`)
-  }
-
-  const onImport = async (file: File) => {
+  const demo = async () => {
+    setSeeding(true)
     try {
-      const list = parseImport(await file.text())
-      merge(list)
-      setImportError(null)
+      const { projectId, lotId } = await seedDemoProject()
+      nav(`/p/${projectId}/l/${lotId}/decision`)
     } catch (e) {
-      setImportError(e instanceof Error ? e.message : 'Import impossible.')
+      alert(errorMessage(e))
+    } finally {
+      setSeeding(false)
     }
   }
 
@@ -41,275 +52,316 @@ export default function Home() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-title text-[34px] leading-none font-bold sm:text-[40px]">Consultations</h1>
-          <p className="mt-2 text-ink-2">Un DPGF, les offres des entreprises, et le comparatif pour décider.</p>
+          <h1 className="font-title text-[34px] leading-none font-bold sm:text-[40px]">Mes projets</h1>
+          <p className="mt-2 text-ink-2">Un projet par affaire ; dans chaque projet, un lot par demande d’offre.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {consultations.length > 0 && (
-            <Button variant="ghost" onClick={openDemo}>
-              Ouvrir l’exemple
+          {!!items?.length && (
+            <Button variant="ghost" icon={seeding ? <Spinner /> : <Sparkles size={16} />} disabled={seeding} onClick={demo}>
+              Projet d’exemple
             </Button>
           )}
           <Button variant="primary" icon={<Plus size={18} />} onClick={() => setCreating(true)}>
-            Nouvelle consultation
+            Nouveau projet
           </Button>
         </div>
       </div>
 
-      {consultations.length === 0 ? (
-        <Onboarding onCreate={() => setCreating(true)} onDemo={openDemo} />
-      ) : (
-        <ConsultationList
-          items={consultations}
-          onOpen={(c) => nav(`/c/${c.id}/${c.offers.length >= 2 ? 'comparatif' : linesOf(c.items).length ? 'offres' : 'dpgf'}`)}
-          onDuplicate={(c) => {
-            const id = duplicate(c.id)
-            if (id) nav(`/c/${id}/dpgf`)
-          }}
-          onExport={(c) => exportJson([c], c.name)}
-          onRemove={(c) => {
-            if (confirm(`Supprimer « ${c.name} » et ses ${c.offers.length} offre(s) ? Cette action est définitive.`)) remove(c.id)
-          }}
-        />
+      {error && <ErrorBox message={error} onRetry={reload} />}
+      {!items && !error && <Loading />}
+      {items && items.length === 0 && (
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_1fr]">
+          <div className="panel flex flex-col gap-6 p-6 sm:p-8">
+            <h2 className="font-title text-[28px] leading-tight font-semibold">Lancer une consultation en trois temps</h2>
+            <ol className="grid gap-4">
+              {[
+                ['Créez le projet et ses lots', 'Pour chaque lot : la DPGF (collée depuis Excel) et la date de rendu.'],
+                ['Partagez le code du projet', 'Les entreprises créent leur compte, saisissent le code et répondent en ligne.'],
+                ['Comparez et décidez', 'Podium, critères notés, commentaires internes et synthèse à présenter.'],
+              ].map(([t, d], i) => (
+                <li key={t} className="grid grid-cols-[2.25rem_1fr] gap-3">
+                  <span className="num flex size-9 items-center justify-center rounded-full border border-ink/70 text-[17px] font-semibold">{i + 1}</span>
+                  <div>
+                    <p className="font-semibold">{t}</p>
+                    <p className="text-ink-2">{d}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" icon={<Plus size={18} />} onClick={() => setCreating(true)}>
+                Créer mon premier projet
+              </Button>
+              <Button icon={seeding ? <Spinner /> : <Sparkles size={16} />} disabled={seeding} onClick={demo}>
+                Voir un projet d’exemple
+              </Button>
+            </div>
+          </div>
+          <div className="panel hidden flex-col justify-center gap-3 p-8 text-ink-2 sm:flex">
+            <p className="text-[14px] text-ink-3">Ce que voient les entreprises</p>
+            <div className="rounded-md border border-line p-4">
+              <p className="text-[13px] text-ink-3">Code du projet</p>
+              <p className="num text-[34px] font-semibold tracking-[0.2em] text-ink">K7M4QX</p>
+            </div>
+            <p className="text-[14px]">Elles ne voient ni votre budget, ni les offres concurrentes, ni vos notes.</p>
+          </div>
+        </div>
+      )}
+      {items && items.length > 0 && (
+        <ul className="grid gap-3 md:grid-cols-2">
+          {items.map((it) => (
+            <ProjectCard key={it.project.id} it={it} />
+          ))}
+        </ul>
       )}
 
-      <section className="no-print flex flex-col gap-3 border-t border-line pt-5 text-[14px] text-ink-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-[62ch]">
-          Vos données restent dans ce navigateur, sur cet appareil. Exportez une sauvegarde pour les conserver ou les
-          transférer.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" icon={<Download size={15} />} disabled={!consultations.length} onClick={() => exportJson(consultations)}>
-            Exporter la sauvegarde
-          </Button>
-          <Button size="sm" icon={<FileUp size={15} />} onClick={() => fileRef.current?.click()}>
-            Importer
-          </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) onImport(f)
-              e.target.value = ''
-            }}
-          />
-        </div>
-      </section>
-      {importError && <p className="text-[14px] text-bad">{importError}</p>}
-
-      <ConsultationForm
+      <ProjectForm
         open={creating}
         onClose={() => setCreating(false)}
-        title="Nouvelle consultation"
-        submitLabel="Créer et saisir le DPGF"
-        onSubmit={(d) => {
-          const c = newConsultation(d)
-          add(c)
+        onCreated={(id) => {
           setCreating(false)
-          nav(`/c/${c.id}/dpgf`)
+          nav(`/p/${id}`)
         }}
       />
     </div>
   )
 }
 
-function Onboarding({ onCreate, onDemo }: { onCreate: () => void; onDemo: () => void }) {
-  const steps = [
-    ['Le DPGF', 'Désignations, unités et quantités. Collez-le depuis Excel en une fois.'],
-    ['Les offres', 'Saisissez les prix unitaires de chaque entreprise, ses variantes et ses options.'],
-    ['Le comparatif', 'Classement, écarts au budget, prix anormaux et lignes oubliées : de quoi arbitrer.'],
-  ]
+function ProjectCard({ it }: { it: ProjectListItem }) {
+  const next = useMemo(() => {
+    const upcoming = it.lots.map((l) => daysUntil(l.due_date)).filter((d): d is number => d != null && d >= 0)
+    return upcoming.length ? Math.min(...upcoming) : null
+  }, [it.lots])
+  const submitted = it.offers.filter((o) => o.status === 'submitted').length
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.1fr_1fr]">
-      <div className="panel flex flex-col justify-between gap-6 p-6 sm:p-8">
-        <div>
-          <h2 className="font-title text-[28px] leading-tight font-semibold">Comparez vos offres en trois temps</h2>
-          <ol className="mt-5 grid gap-4">
-            {steps.map(([t, d], i) => (
-              <li key={t} className="grid grid-cols-[2.25rem_1fr] gap-3">
-                <span className="num flex size-9 items-center justify-center rounded-full border border-ink/70 text-[17px] font-semibold">
-                  {i + 1}
-                </span>
-                <div>
-                  <p className="font-semibold">{t}</p>
-                  <p className="text-ink-2">{d}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="primary" icon={<Plus size={18} />} onClick={onCreate}>
-            Créer ma première consultation
-          </Button>
-          <Button onClick={onDemo}>Ouvrir l’exemple (lot VRD)</Button>
-        </div>
-      </div>
-      <DemoPreview />
-    </div>
-  )
-}
-
-/** Aperçu statique de ce que produit le comparatif */
-function DemoPreview() {
-  const rows = [
-    { n: 'TP Val-de-Seine', v: 371569, best: true },
-    { n: 'Bitumes & Bordures', v: 377563 },
-    { n: 'Réseaux Île-de-France', v: 390234 },
-  ]
-  const max = 400000
-  return (
-    <div className="panel hidden flex-col gap-4 p-6 sm:flex sm:p-8" aria-hidden="true">
-      <p className="text-[14px] text-ink-3">Aperçu du comparatif, lot VRD</p>
-      <div className="grid gap-3">
-        {rows.map((r) => (
-          <div key={r.n} className="grid gap-1">
-            <div className="flex justify-between text-[14px]">
-              <span className={cx(r.best && 'font-semibold')}>{r.n}</span>
-              <span className={cx('num', r.best && 'marker font-semibold')}>{fmtEur(r.v)}</span>
-            </div>
-            <div className="relative h-2.5 rounded-full bg-line-2">
-              <div className="h-full rounded-full bg-s1" style={{ width: `${(r.v / max) * 100}%`, opacity: r.best ? 1 : 0.55 }} />
-              <div className="absolute inset-y-[-4px] w-0.5 bg-ink" style={{ left: `${(375000 / max) * 100}%` }} />
-            </div>
+    <li>
+      <Link to={`/p/${it.project.id}`} className="panel group flex h-full flex-col gap-4 p-5 transition-colors hover:border-ink-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="truncate text-[19px] font-semibold">{it.project.name}</h3>
+            <p className="truncate text-[13.5px] text-ink-3">{it.project.reference || 'Sans référence'}</p>
           </div>
-        ))}
-      </div>
-      <p className="text-[13.5px] text-ink-2">
-        Le trait noir marque le budget. Réseaux Île-de-France paraissait moins cher avant la remise à niveau de deux lignes
-        non chiffrées.
-      </p>
-    </div>
+          <span className="num shrink-0 rounded-[4px] border border-ink/70 px-2 py-0.5 text-[13px] font-semibold tracking-[0.12em]">{it.project.access_code}</span>
+        </div>
+        <dl className="grid grid-cols-3 gap-3 text-[14px]">
+          <div>
+            <dt className="text-[12.5px] text-ink-3">Lots</dt>
+            <dd className="num font-semibold">{it.lots.length}</dd>
+          </div>
+          <div>
+            <dt className="text-[12.5px] text-ink-3">Offres reçues</dt>
+            <dd className="num font-semibold">{submitted}</dd>
+          </div>
+          <div>
+            <dt className="text-[12.5px] text-ink-3">Prochaine remise</dt>
+            <dd className={cx('num font-semibold', next != null && next <= 3 && 'text-warn')}>{next == null ? '—' : next === 0 ? 'ce soir' : `J−${next}`}</dd>
+          </div>
+        </dl>
+        <span className="mt-auto inline-flex items-center gap-1 text-[14px] font-medium text-plan">
+          Ouvrir le projet <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+        </span>
+      </Link>
+    </li>
   )
 }
 
-const STATUS_STYLE: Record<ConsultationStatus, string> = {
-  preparation: 'bg-line-2 text-ink-2',
-  waiting: 'bg-warn-soft text-warn',
-  analysis: 'bg-plan-soft text-plan-dark',
-  awarded: 'bg-good-soft text-good',
-}
-
-function ConsultationList({
-  items,
-  onOpen,
-  onDuplicate,
-  onExport,
-  onRemove,
+export function ProjectForm({
+  open,
+  onClose,
+  onCreated,
+  initial,
+  onSaved,
 }: {
-  items: Consultation[]
-  onOpen: (c: Consultation) => void
-  onDuplicate: (c: Consultation) => void
-  onExport: (c: Consultation) => void
-  onRemove: (c: Consultation) => void
-}) {
-  const rows = useMemo(
-    () =>
-      items.map((c) => {
-        const a = analyze(c)
-        const companies = new Set(c.offers.map((o) => companyKey(o.company))).size
-        return { c, a, companies, status: statusOf(c), days: daysUntil(c.dueDate) }
-      }),
-    [items],
-  )
-  return (
-    <div className="panel overflow-hidden">
-      <div className="hidden grid-cols-[minmax(0,2.2fr)_1fr_0.8fr_1.3fr_auto] gap-4 border-b border-line bg-paper/60 px-5 py-2.5 text-[13px] text-ink-3 md:grid">
-        <span>Consultation</span>
-        <span>Remise des offres</span>
-        <span>Offres</span>
-        <span>Moins-disant</span>
-        <span className="w-9" />
-      </div>
-      <ul>
-        {rows.map(({ c, a, companies, status, days }) => (
-          <li key={c.id} className="border-b border-line-2 last:border-0">
-            <div className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 hover:bg-paper/50 sm:px-5 md:grid-cols-[minmax(0,2.2fr)_1fr_0.8fr_1.3fr_auto]">
-              <button type="button" onClick={() => onOpen(c)} className="min-w-0 text-left">
-                <span className="block truncate text-[17px] font-semibold">{c.name}</span>
-                <span className="block truncate text-[13.5px] text-ink-3">
-                  {[c.affaire, c.lot].filter(Boolean).join(', ') || 'Sans affaire'}
-                </span>
-                <span className={cx('mt-1.5 inline-block rounded-[3px] px-1.5 py-0.5 text-[12px] font-medium', STATUS_STYLE[status])}>
-                  {STATUS_LABEL[status]}
-                </span>
-              </button>
-              <div className="row-span-1 md:hidden">
-                <RowMenu c={c} onDuplicate={onDuplicate} onExport={onExport} onRemove={onRemove} />
-              </div>
-              <button type="button" onClick={() => onOpen(c)} className="col-span-2 grid grid-cols-3 gap-3 text-left text-[14px] md:col-span-3 md:grid-cols-[1fr_0.8fr_1.3fr] md:gap-4">
-                <span>
-                  <span className="block text-[12px] text-ink-3 md:hidden">Remise</span>
-                  <span className="num">{fmtDate(c.dueDate)}</span>
-                  {days != null && status !== 'awarded' && (
-                    <span className={cx('block text-[12.5px]', days < 0 ? 'text-ink-3' : days <= 3 ? 'font-medium text-warn' : 'text-ink-3')}>
-                      {days > 0 ? `dans ${days} j` : days === 0 ? 'aujourd’hui' : `il y a ${-days} j`}
-                    </span>
-                  )}
-                </span>
-                <span>
-                  <span className="block text-[12px] text-ink-3 md:hidden">Offres</span>
-                  <span className="num">{companies}</span>
-                  <span className="text-ink-3"> entreprise{companies > 1 ? 's' : ''}</span>
-                  {c.offers.length > companies && <span className="block text-[12.5px] text-ink-3">{c.offers.length} réponses</span>}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[12px] text-ink-3 md:hidden">Moins-disant</span>
-                  {a.best ? (
-                    <>
-                      <span className="num font-semibold">{fmtEur(a.best.total)}</span>
-                      <span className="block truncate text-[12.5px] text-ink-3">{a.best.label}</span>
-                      {a.bestVsBudget != null && (
-                        <span className={cx('block text-[12.5px]', a.bestVsBudget > 0 ? 'text-bad' : 'text-good')}>
-                          {fmtPctSigned(a.bestVsBudget)} par rapport au budget
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-ink-3">—</span>
-                  )}
-                </span>
-              </button>
-              <div className="hidden md:block">
-                <RowMenu c={c} onDuplicate={onDuplicate} onExport={onExport} onRemove={onRemove} />
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function RowMenu({
-  c,
-  onDuplicate,
-  onExport,
-  onRemove,
-}: {
-  c: Consultation
-  onDuplicate: (c: Consultation) => void
-  onExport: (c: Consultation) => void
-  onRemove: (c: Consultation) => void
+  open: boolean
+  onClose: () => void
+  onCreated?: (id: string) => void
+  initial?: { id: string; name: string; reference: string; description: string }
+  onSaved?: () => void
 }) {
   return (
-    <Menu label={`Actions pour ${c.name}`} icon={<MoreHorizontal size={18} />}>
-      {(close) => (
-        <>
-          <MenuItem icon={<Copy />} onClick={() => (close(), onDuplicate(c))}>
-            Réutiliser le DPGF
-          </MenuItem>
-          <MenuItem icon={<Download />} onClick={() => (close(), onExport(c))}>
-            Exporter cette consultation
-          </MenuItem>
-          <MenuItem icon={<Trash2 />} danger onClick={() => (close(), onRemove(c))}>
-            Supprimer
-          </MenuItem>
-        </>
+    <Dialog open={open} onClose={onClose} title={initial ? 'Modifier le projet' : 'Nouveau projet'}>
+      {open && <ProjectFormBody onClose={onClose} onCreated={onCreated} initial={initial} onSaved={onSaved} />}
+    </Dialog>
+  )
+}
+
+function ProjectFormBody({
+  onClose,
+  onCreated,
+  initial,
+  onSaved,
+}: {
+  onClose: () => void
+  onCreated?: (id: string) => void
+  initial?: { id: string; name: string; reference: string; description: string }
+  onSaved?: () => void
+}) {
+  const [f, setF] = useState({ name: initial?.name ?? '', reference: initial?.reference ?? '', description: initial?.description ?? '' })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={async (e) => {
+        e.preventDefault()
+        setBusy(true)
+        setError(null)
+        try {
+          if (initial) {
+            await api.updateProject(initial.id, { name: f.name.trim(), reference: f.reference.trim(), description: f.description })
+            onSaved?.()
+          } else {
+            const p = await api.createProject({ name: f.name.trim(), reference: f.reference.trim(), description: f.description })
+            onCreated?.(p.id)
+          }
+        } catch (err) {
+          setError(errorMessage(err))
+        } finally {
+          setBusy(false)
+        }
+      }}
+    >
+      <Field label="Nom du projet" htmlFor="pr-name">
+        <input id="pr-name" className="field" required autoFocus placeholder="Ex. Logements Paris 17e – Résidence des Tilleuls" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      </Field>
+      <Field label="Référence de l’affaire" htmlFor="pr-ref">
+        <input id="pr-ref" className="field" placeholder="Ex. 24-017" value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
+      </Field>
+      <Field label="Présentation pour les entreprises" htmlFor="pr-desc" hint="Adresse du chantier, planning, contacts… visible des entreprises.">
+        <textarea id="pr-desc" rows={3} className="field resize-y" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
+      </Field>
+      {error && <p className="text-[14px] text-bad">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onClose}>
+          Annuler
+        </Button>
+        <Button type="submit" variant="primary" disabled={busy || !f.name.trim()}>
+          {busy && <Spinner />} {initial ? 'Enregistrer' : 'Créer le projet'}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// ————————————————————————— Entreprise —————————————————————————
+
+function CompanyHome({ items, error, reload }: { items: ProjectListItem[] | null; error: string | null; reload: () => void }) {
+  const nav = useNavigate()
+  const { userId } = useAuth()
+  const [autoJoin, setAutoJoin] = useState(() => pendingCode.get())
+
+  // Arrivée par un lien d'invitation : on rejoint le projet automatiquement
+  useEffect(() => {
+    if (!autoJoin) return
+    let alive = true
+    api
+      .joinProject(autoJoin)
+      .then((pid) => alive && nav(`/p/${pid}`))
+      .catch(() => {})
+      .finally(() => {
+        pendingCode.clear()
+        if (alive) setAutoJoin(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [autoJoin, nav])
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="font-title text-[34px] leading-none font-bold sm:text-[40px]">Mes consultations</h1>
+        <p className="mt-2 text-ink-2">Les projets sur lesquels vous êtes invité à remettre une offre.</p>
+      </div>
+      <JoinCodeBox onJoined={(pid) => nav(`/p/${pid}`)} />
+      {error && <ErrorBox message={error} onRetry={reload} />}
+      {(!items || autoJoin) && !error && <Loading />}
+      {items && !autoJoin && items.length === 0 && (
+        <EmptyState title="Aucun projet pour l’instant">Saisissez ci-dessus le code transmis par l’acheteur pour accéder à ses demandes d’offre.</EmptyState>
       )}
-    </Menu>
+      {items && items.length > 0 && (
+        <ul className="grid gap-3 md:grid-cols-2">
+          {items.map((it) => {
+            const mine = it.offers.filter((o) => o.company_id === userId)
+            const sent = mine.filter((o) => o.status === 'submitted').length
+            const open = it.lots.filter((l) => (daysUntil(l.due_date) ?? 0) >= 0)
+            return (
+              <li key={it.project.id}>
+                <Link to={`/p/${it.project.id}`} className="panel group flex h-full flex-col gap-3 p-5 hover:border-ink-3">
+                  <h3 className="text-[19px] font-semibold">{it.project.name}</h3>
+                  <p className="text-[14px] text-ink-2">
+                    <span className="num font-semibold text-ink">{it.lots.length}</span> lot{it.lots.length > 1 ? 's' : ''},{' '}
+                    <span className="num font-semibold text-ink">{sent}</span> offre{sent > 1 ? 's' : ''} envoyée{sent > 1 ? 's' : ''}
+                    {open.length > 0 && (
+                      <>
+                        , prochaine remise le <span className="num font-medium">{fmtDate([...open].sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))[0].due_date)}</span>
+                      </>
+                    )}
+                  </p>
+                  <span className="mt-auto inline-flex items-center gap-1 text-[14px] font-medium text-plan">
+                    Voir les lots <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+export function JoinCodeBox({ onJoined, initial = '' }: { onJoined: (pid: string) => void; initial?: string }) {
+  const [code, setCode] = useState(initial.toUpperCase())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [shakeKey, setShakeKey] = useState(0)
+  const clean = code.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6)
+  return (
+    <form
+      className="panel grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center"
+      onSubmit={async (e) => {
+        e.preventDefault()
+        setBusy(true)
+        setError(null)
+        try {
+          onJoined(await api.joinProject(clean))
+        } catch (err) {
+          setError(errorMessage(err))
+          setShakeKey((k) => k + 1)
+        } finally {
+          setBusy(false)
+        }
+      }}
+    >
+      <div className="flex flex-col gap-1">
+        <label htmlFor="join-code" className="flex items-center gap-2 text-[17px] font-semibold">
+          <KeyRound size={18} className="text-plan" /> Rejoindre un projet
+        </label>
+        <p className="text-[14px] text-ink-2">Saisissez le code de 6 caractères transmis par l’acheteur.</p>
+        {error && (
+          <p className="text-[14px] text-bad" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <div key={shakeKey} className={cx('w-full md:w-[260px]', shakeKey > 0 && 'anim-shake')}>
+          <input
+            id="join-code"
+            className="field num h-14 text-center text-[28px] font-semibold tracking-[0.4em] uppercase"
+            placeholder="······"
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            value={clean}
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </div>
+        <Button type="submit" variant="primary" className="h-14 px-5" disabled={busy || clean.length < 6}>
+          {busy ? <Spinner /> : <ArrowRight size={18} />} Accéder
+        </Button>
+      </div>
+    </form>
   )
 }

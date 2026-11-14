@@ -77,7 +77,7 @@ const looksLikeUnit = (s: string) => {
   const k = s.trim().toLowerCase()
   return k.length > 0 && k.length <= 8 && (k in UNIT_ALIASES || (UNITS as readonly string[]).includes(k))
 }
-const looksLikeRef = (s: string) => /^[A-Za-z]{0,4}\s?[\d]+([.\-][\dA-Za-z]+)*\.?$/.test(s.trim()) && s.trim().length <= 12
+const looksLikeRef = (s: string) => /^[A-Za-z]{0,4}\s?[\d]+([.-][\dA-Za-z]+)*\.?$/.test(s.trim()) && s.trim().length <= 12
 
 export type ColumnRole = 'ref' | 'label' | 'unit' | 'qty' | 'ignore'
 

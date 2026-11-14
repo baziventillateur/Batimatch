@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { analyze, median, activeOffers, statusOf } from './calc'
 import { parseNumber, parsePrice, guessDpgfColumns, rowsToItems, splitClipboard, guessPriceColumn } from './parse'
-import type { Consultation, DpgfItem, Offer } from './types'
+import { DEFAULT_CRITERIA, type Consultation, type DpgfItem, type Offer } from './types'
+import { scoreOffers, strengthsAndWeaknesses } from './decision'
 import { buildDemo } from './demo'
 
 const item = (id: string, qty: number, extra: Partial<DpgfItem> = {}): DpgfItem => ({
@@ -9,12 +10,13 @@ const item = (id: string, qty: number, extra: Partial<DpgfItem> = {}): DpgfItem 
 })
 const offer = (id: string, company: string, prices: Offer['prices'], extra: Partial<Offer> = {}): Offer => ({
   id, company, version: 1, receivedAt: '2026-11-01', prices, discountPct: 0, extras: [],
-  durationWeeks: null, validUntil: null, techScore: null, reserves: '', notes: '', ...extra,
+  durationWeeks: null, validUntil: null, reserves: '', message: '', companyId: null, source: 'manual', status: 'submitted',
+  contact: { firstName: '', lastName: '', email: '', phone: '' }, logoUrl: null, submittedAt: null, ...extra,
 })
 const consultation = (items: DpgfItem[], offers: Offer[], settings: Partial<Consultation['settings']> = {}): Consultation => ({
-  id: 'c', name: 'Test', affaire: '', lot: '', dueDate: null, budget: 1000, description: '',
+  id: 'c', projectId: 'p', name: 'Test', affaire: '', lot: '', dueDate: null, budget: 1000, description: '',
   items, offers, awardedOfferId: null, createdAt: '', updatedAt: '',
-  settings: { latestOnly: true, fillMode: 'median', priceWeight: 60, pseRetained: {}, ...settings },
+  settings: { latestOnly: true, fillMode: 'median', pseRetained: {}, extrasRetained: {}, criteria: DEFAULT_CRITERIA, ...settings },
 })
 
 describe('parseNumber', () => {
@@ -123,22 +125,36 @@ describe('analyse comparative', () => {
     expect(a.histories[0].gain).toBe(200 - 180)
     expect(activeOffers({ ...c, settings: { ...c.settings, latestOnly: false } })).toHaveLength(3)
   })
-  it('calcule la note globale pondérée', () => {
+  it('calcule la note globale pondérée par critères', () => {
     const c = consultation(items, [
-      offer('o1', 'Alpha', { a: 10, b: 50 }, { techScore: 10 }),
-      offer('o2', 'Beta', { a: 20, b: 50 }, { techScore: 20 }),
-    ], { priceWeight: 50 })
+      offer('o1', 'Alpha', { a: 10, b: 50 }, { durationWeeks: 10 }),
+      offer('o2', 'Beta', { a: 20, b: 50 }, { durationWeeks: 20 }),
+    ])
     const a = analyze(c)
-    expect(a.offers[1].priceScore).toBeCloseTo(20 * 200 / 300)
-    expect(a.offers[1].globalScore).toBeCloseTo(0.5 * (20 * 200 / 300) + 10)
-    expect(a.offers[1].scoreRank).toBe(1)
+    const criteria = [
+      { id: 'price', label: 'Prix', weight: 50, kind: 'price' as const },
+      { id: 'tech', label: 'Technique', weight: 40, kind: 'manual' as const },
+      { id: 'delay', label: 'Délai', weight: 10, kind: 'delay' as const },
+    ]
+    const s1 = scoreOffers(a, criteria, { o1: { offerId: 'o1', scores: { tech: 10 }, verdict: null }, o2: { offerId: 'o2', scores: { tech: 20 }, verdict: null } })
+    const beta = s1.find((x) => x.result.offer.id === 'o2')!
+    expect(beta.global).toBeCloseTo((50 * (20 * 200 / 300) + 40 * 20 + 10 * 10) / 100)
+    expect(s1[0].result.offer.id).toBe('o1') // 16 contre 15,67
+    expect(s1[0].complete).toBe(true)
+    // Une offre écartée sort du classement
+    const s2 = scoreOffers(a, criteria, { o2: { offerId: 'o2', scores: { tech: 20 }, verdict: 'ecarte' } })
+    expect(s2[0].result.offer.id).toBe('o1')
+    expect(s2.find((x) => x.result.offer.id === 'o2')!.rank).toBeNull()
+    expect(s2.find((x) => x.result.offer.id === 'o1')!.complete).toBe(false)
   })
 })
 
 describe('démo', () => {
   it('produit une analyse cohérente', () => {
-    const c = buildDemo()
+    const { consultation: c } = buildDemo()
     const a = analyze(c)
+    const sw = strengthsAndWeaknesses(a, a.best!)
+    expect(sw.plus).toContain('Moins-disant après remise à niveau')
     expect(a.ranked).toHaveLength(3)
     expect(a.histories).toHaveLength(1)
     expect(a.insights.length).toBeGreaterThan(3)

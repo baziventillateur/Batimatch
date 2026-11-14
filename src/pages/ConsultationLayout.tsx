@@ -1,104 +1,147 @@
-import { useMemo, useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { ChevronLeft, Copy, Download, FileSpreadsheet, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { AlertTriangle, Check, ChevronLeft, FileSpreadsheet, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { useConsultation, useStore } from '../store'
+import { api, errorMessage } from '../data'
+import { useAuth } from '../data/auth'
+import { loadLot, startLotSync, useSync } from '../data/sync'
 import { companyKey, linesOf, statusOf, STATUS_LABEL } from '../lib/calc'
 import { daysUntil, fmtDate, fmtEur } from '../lib/format'
-import { exportBlankDpgf, exportJson } from '../lib/io'
+import { exportBlankDpgf } from '../lib/io'
 import type { Consultation } from '../lib/types'
-import { ConsultationForm } from '../components/ConsultationForm'
-import { Button, EmptyState, Menu, MenuItem, cx } from '../components/ui'
+import { Button, Dialog, ErrorBox, Field, Loading, Menu, MenuItem, NumberInput, Spinner, cx } from '../components/ui'
 
 export const useC = () => useOutletContext<Consultation>()
 
+/** Indicateur d'enregistrement automatique */
+export function SaveIndicator() {
+  const { status, error, retry } = useSync()
+  if (status === 'idle') return null
+  if (status === 'error') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[13px] text-bad" role="alert">
+        <AlertTriangle size={14} /> {error}
+        {retry && (
+          <button type="button" className="font-medium underline" onClick={retry}>
+            Réessayer
+          </button>
+        )}
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-3" role="status">
+      {status === 'saving' ? (
+        <>
+          <span className="anim-breathe size-2 rounded-full bg-plan" /> Enregistrement…
+        </>
+      ) : (
+        <>
+          <Check size={14} className="text-good" /> Enregistré
+        </>
+      )}
+    </span>
+  )
+}
+
 export default function ConsultationLayout() {
-  const { cid } = useParams()
+  const { cid = '', pid = '' } = useParams()
+  const { userId } = useAuth()
   const c = useConsultation(cid)
   const update = useStore((s) => s.updateConsultation)
-  const remove = useStore((s) => s.removeConsultation)
-  const duplicate = useStore((s) => s.duplicateConsultation)
+  const drop = useStore((s) => s.dropConsultation)
   const nav = useNavigate()
+  const loc = useLocation()
+  const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
+  const syncRef = useRef<ReturnType<typeof startLotSync> | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    setError(null)
+    useSync.setState({ status: 'idle', error: null })
+    loadLot(cid)
+      .then(() => {
+        if (alive && userId) syncRef.current = startLotSync(cid, 'buyer', userId)
+      })
+      .catch((e) => alive && setError(errorMessage(e)))
+    return () => {
+      alive = false
+      syncRef.current?.stop()
+      syncRef.current = null
+    }
+  }, [cid, userId])
 
   const meta = useMemo(() => {
     if (!c) return null
     const lines = linesOf(c.items)
     return {
       lines: lines.length,
-      pse: lines.filter((l) => l.item.scope === 'option').length,
       companies: new Set(c.offers.map((o) => companyKey(o.company))).size,
       days: daysUntil(c.dueDate),
       status: statusOf(c),
     }
   }, [c])
 
-  if (!c || !meta) {
-    return (
-      <EmptyState title="Consultation introuvable" action={<Button onClick={() => nav('/')}>Retour aux consultations</Button>}>
-        Elle a peut-être été supprimée, ou elle a été créée sur un autre appareil.
-      </EmptyState>
-    )
-  }
+  if (error) return <ErrorBox message={error} onRetry={() => nav(0)} />
+  if (!c || !meta) return <Loading label="Chargement du lot" />
+
+  const isSynthese = loc.pathname.endsWith('/synthese')
+  if (isSynthese) return <Outlet context={c} />
 
   const tabs = [
     { to: 'dpgf', n: 1, label: 'DPGF', count: meta.lines ? `${meta.lines} ligne${meta.lines > 1 ? 's' : ''}` : 'à saisir' },
     { to: 'offres', n: 2, label: 'Offres', count: c.offers.length ? `${meta.companies} entreprise${meta.companies > 1 ? 's' : ''}` : 'aucune' },
     { to: 'comparatif', n: 3, label: 'Comparatif', count: meta.companies >= 2 ? 'prêt' : 'dès 2 offres' },
+    { to: 'decision', n: 4, label: 'Décision', count: c.awardedOfferId ? 'offre retenue' : meta.companies >= 2 ? 'à arbitrer' : 'dès 2 offres' },
   ]
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="no-print">
-        <Link to="/" className="inline-flex items-center gap-1 text-[14px] text-ink-2 hover:text-ink">
-          <ChevronLeft size={16} /> Consultations
+      <div className="no-print flex flex-wrap items-center justify-between gap-3">
+        <Link to={`/p/${pid}`} className="inline-flex items-center gap-1 text-[14px] text-ink-2 hover:text-ink">
+          <ChevronLeft size={16} /> {c.affaire || 'Projet'}
         </Link>
+        <SaveIndicator />
       </div>
 
-      {/* Cartouche */}
-      <section className="cartouche" aria-label="Informations de la consultation">
+      <section className="cartouche" aria-label="Informations du lot">
         <div className="flex items-start justify-between gap-3 border-b border-ink/25 px-4 py-3 sm:px-5">
           <div className="min-w-0">
-            <h1 className="font-title text-[30px] leading-[1.05] font-bold sm:text-[36px]">{c.name}</h1>
-            <p className="mt-1 truncate text-[14.5px] text-ink-2">{c.affaire || 'Affaire non renseignée'}</p>
+            <h1 className="font-title text-[30px] leading-[1.05] font-bold sm:text-[36px]">{c.name || 'Lot sans nom'}</h1>
+            <p className="mt-1 truncate text-[14.5px] text-ink-2">{c.affaire}</p>
           </div>
           <div className="no-print flex shrink-0 items-center gap-1">
             <Button size="sm" variant="ghost" icon={<Pencil size={15} />} onClick={() => setEditing(true)} className="hidden sm:inline-flex">
               Modifier
             </Button>
-            <Menu label="Actions sur la consultation" icon={<MoreHorizontal size={18} />}>
+            <Menu label="Actions sur le lot" icon={<MoreHorizontal size={18} />}>
               {(close) => (
                 <>
                   <MenuItem icon={<Pencil />} onClick={() => (close(), setEditing(true))}>
-                    Modifier les informations
+                    Modifier le lot
                   </MenuItem>
                   <MenuItem icon={<FileSpreadsheet />} onClick={() => (close(), exportBlankDpgf(c))}>
-                    DPGF vierge pour les entreprises (CSV)
-                  </MenuItem>
-                  <MenuItem
-                    icon={<Copy />}
-                    onClick={() => {
-                      close()
-                      const id = duplicate(c.id)
-                      if (id) nav(`/c/${id}/dpgf`)
-                    }}
-                  >
-                    Réutiliser le DPGF
-                  </MenuItem>
-                  <MenuItem icon={<Download />} onClick={() => (close(), exportJson([c], c.name))}>
-                    Exporter la consultation
+                    DPGF vierge (CSV)
                   </MenuItem>
                   <MenuItem
                     icon={<Trash2 />}
                     danger
-                    onClick={() => {
+                    onClick={async () => {
                       close()
-                      if (confirm(`Supprimer « ${c.name} » et ses offres ? Cette action est définitive.`)) {
-                        remove(c.id)
-                        nav('/')
+                      if (!confirm(`Supprimer le lot « ${c.name} » et ses ${c.offers.length} offre(s) ? Cette action est définitive.`)) return
+                      try {
+                        syncRef.current?.stop()
+                        syncRef.current = null
+                        await api.deleteLot(c.id)
+                        drop(c.id)
+                        nav(`/p/${pid}`)
+                      } catch (e) {
+                        alert(errorMessage(e))
                       }
                     }}
                   >
-                    Supprimer
+                    Supprimer le lot
                   </MenuItem>
                 </>
               )}
@@ -116,7 +159,7 @@ export default function ConsultationLayout() {
               {fmtDate(c.dueDate)}
               {meta.days != null && meta.status !== 'awarded' && (
                 <span className={cx('ml-2 text-[13px] font-normal', meta.days >= 0 && meta.days <= 3 ? 'text-warn' : 'text-ink-3')}>
-                  {meta.days > 0 ? `J−${meta.days}` : meta.days === 0 ? 'aujourd’hui' : `il y a ${-meta.days} j`}
+                  {meta.days > 0 ? `J−${meta.days}` : meta.days === 0 ? 'ce soir' : 'clôturé'}
                 </span>
               )}
             </dd>
@@ -132,7 +175,6 @@ export default function ConsultationLayout() {
         </dl>
       </section>
 
-      {/* Étapes */}
       <nav aria-label="Étapes" className="no-print -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <ol className="flex min-w-max gap-1 border-b border-line">
           {tabs.map((t) => (
@@ -140,20 +182,12 @@ export default function ConsultationLayout() {
               <NavLink
                 to={t.to}
                 className={({ isActive }) =>
-                  cx(
-                    '-mb-px flex items-center gap-2.5 border-b-[3px] px-3 py-2.5 sm:px-4',
-                    isActive ? 'border-ink text-ink' : 'border-transparent text-ink-2 hover:text-ink',
-                  )
+                  cx('-mb-px flex items-center gap-2.5 border-b-[3px] px-3 py-2.5 sm:px-4', isActive ? 'border-ink text-ink' : 'border-transparent text-ink-2 hover:text-ink')
                 }
               >
                 {({ isActive }) => (
                   <>
-                    <span
-                      className={cx(
-                        'num flex size-6 items-center justify-center rounded-full text-[13px] font-semibold',
-                        isActive ? 'bg-ink text-white' : 'border border-ink-3 text-ink-2',
-                      )}
-                    >
+                    <span className={cx('num flex size-6 items-center justify-center rounded-full text-[13px] font-semibold transition-colors', isActive ? 'bg-ink text-white' : 'border border-ink-3 text-ink-2')}>
                       {t.n}
                     </span>
                     <span className="flex flex-col leading-tight">
@@ -170,17 +204,58 @@ export default function ConsultationLayout() {
 
       <Outlet context={c} />
 
-      <ConsultationForm
-        open={editing}
-        onClose={() => setEditing(false)}
-        initial={c}
-        title="Modifier la consultation"
-        submitLabel="Enregistrer"
-        onSubmit={(d) => {
-          update(c.id, d)
-          setEditing(false)
-        }}
-      />
+      <Dialog open={editing} onClose={() => setEditing(false)} title="Modifier le lot">
+        {editing && (
+          <LotEditForm
+            c={c}
+            onClose={() => setEditing(false)}
+            onSave={(patch) => {
+              update(c.id, patch)
+              setEditing(false)
+            }}
+          />
+        )}
+      </Dialog>
     </div>
+  )
+}
+
+function LotEditForm({ c, onClose, onSave }: { c: Consultation; onClose: () => void; onSave: (p: Partial<Consultation>) => void }) {
+  const [f, setF] = useState({ name: c.name, lot: c.lot, dueDate: c.dueDate, budget: c.budget, description: c.description })
+  const [busy] = useState(false)
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        onSave({ ...f, name: f.name.trim() })
+      }}
+    >
+      <Field label="Nom du lot" htmlFor="le-name">
+        <input id="le-name" className="field" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Numéro du lot" htmlFor="le-code">
+          <input id="le-code" className="field" value={f.lot} onChange={(e) => setF({ ...f, lot: e.target.value })} />
+        </Field>
+        <Field label="Date de rendu" htmlFor="le-due" hint="La repousser rouvre la saisie aux entreprises.">
+          <input id="le-due" type="date" className="field" value={f.dueDate ?? ''} onChange={(e) => setF({ ...f, dueDate: e.target.value || null })} />
+        </Field>
+      </div>
+      <Field label="Budget objectif HT" htmlFor="le-budget" hint="Visible de vous seul.">
+        <NumberInput id="le-budget" suffix="€" value={f.budget} onCommit={(v) => setF({ ...f, budget: v })} />
+      </Field>
+      <Field label="Consignes pour les entreprises" htmlFor="le-desc" hint="Pièces du DCE, visite, hypothèses… visibles des entreprises.">
+        <textarea id="le-desc" rows={3} className="field resize-y" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onClose}>
+          Annuler
+        </Button>
+        <Button type="submit" variant="primary" disabled={busy || !f.name.trim()}>
+          {busy && <Spinner />} Enregistrer
+        </Button>
+      </div>
+    </form>
   )
 }

@@ -149,6 +149,88 @@
   }
 }
 
+/* ——— Animations : elles répondent à une action ou marquent un moment clé ——— */
+@keyframes rise {
+  from {
+    transform: scaleY(0.05);
+  }
+}
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes stamp {
+  0% {
+    opacity: 0;
+    transform: rotate(-14deg) scale(2.2);
+  }
+  60% {
+    opacity: 1;
+    transform: rotate(-8deg) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: 48;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+@keyframes marker-sweep {
+  from {
+    background-size: 0% 78%;
+  }
+}
+@keyframes breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+.anim-rise {
+  transform-origin: bottom;
+  animation: rise 0.9s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+}
+.anim-pop {
+  animation: pop-in 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+}
+.anim-stamp {
+  animation: stamp 0.55s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+.anim-draw {
+  stroke-dasharray: 48;
+  animation: draw 0.6s 0.15s ease-out both;
+}
+.anim-shake {
+  animation: shake 0.4s ease-in-out;
+}
+.anim-marker {
+  animation: marker-sweep 0.7s 0.25s ease-out both;
+}
+.anim-breathe {
+  animation: breathe 1.2s ease-in-out infinite;
+}
+
 dialog::backdrop {
   background: rgb(27 42 58 / 0.45);
 }
