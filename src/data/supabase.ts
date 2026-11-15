@@ -200,6 +200,21 @@ export function createSupabaseBackend(): Backend {
     async deleteOffer(id) {
       check(await sb.from('offers').delete().eq('id', id))
     },
+    async uploadOfferFile(lotId, folder, offerId, file) {
+      const path = `${lotId}/${folder}/${offerId}.pdf`
+      const { error } = await sb.storage.from('offer-files').upload(path, file, { upsert: true, contentType: 'application/pdf', cacheControl: '0' })
+      if (error) throw error
+      return { path, name: file.name, size: file.size, at: new Date().toISOString() }
+    },
+    async removeOfferFile(path) {
+      const { error } = await sb.storage.from('offer-files').remove([path])
+      if (error) throw error
+    },
+    async offerFileUrl(path) {
+      const { data, error } = await sb.storage.from('offer-files').createSignedUrl(path, 300)
+      if (error || !data) throw error ?? new Error('Fichier introuvable.')
+      return data.signedUrl
+    },
     async upsertReview(row) {
       check(await sb.from('offer_reviews').upsert(row, { onConflict: 'offer_id' }))
     },

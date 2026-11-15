@@ -109,6 +109,7 @@ export default function OffersTab() {
                             <span className="num block font-semibold">{declared ? fmtEur(declared) : 'À chiffrer'}</span>
                             <span className="block text-[0.7812rem] text-ink-3">
                               {o.source === 'platform' ? `Envoyée en ligne le ${fmtDate((o.submittedAt ?? '').slice(0, 10) || null)}` : `Saisie par vous, reçue le ${fmtDate(o.receivedAt)}`}
+                              {o.techNote ? ', notice technique jointe' : ''}
                             </span>
                           </span>
                           <span className="w-24 sm:w-32">

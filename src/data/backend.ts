@@ -1,5 +1,5 @@
 import type { AccessStatus, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, LotStatus, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
-import type { Role } from '../lib/types'
+import type { Role, TechNote } from '../lib/types'
 
 export interface SignUpInput {
   email: string
@@ -89,6 +89,11 @@ export interface Backend {
   // Offres
   upsertOffer(row: OfferRow): Promise<void>
   deleteOffer(id: string): Promise<void>
+  /** Dépose la notice technique (PDF) d'une offre. `folder` = compte de l'entreprise, ou « manual » pour une offre saisie par l'acheteur. */
+  uploadOfferFile(lotId: string, folder: string, offerId: string, file: File): Promise<TechNote>
+  removeOfferFile(path: string): Promise<void>
+  /** Lien temporaire pour ouvrir un fichier d'offre */
+  offerFileUrl(path: string): Promise<string>
   // Évaluation interne
   upsertReview(row: ReviewRow): Promise<void>
   addComment(row: Omit<CommentRow, 'id' | 'created_at' | 'author_id'>): Promise<CommentRow>
@@ -98,7 +103,7 @@ export interface Backend {
 /** Message d'erreur lisible pour l'utilisateur */
 export function errorMessage(e: unknown): string {
   const raw = e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : String(e)
-  if (/lot_access|project_lot_catalog|column .*status.* does not exist|schema cache/i.test(raw)) return 'La base de données doit être mise à jour : relancez supabase/schema.sql dans l’éditeur SQL de Supabase.'
+  if (/lot_access|tech_note|offer-files|Bucket not found|project_lot_catalog|column .*status.* does not exist|schema cache/i.test(raw)) return 'La base de données doit être mise à jour : relancez supabase/schema.sql dans l’éditeur SQL de Supabase.'
   if (/invalid login credentials/i.test(raw)) return 'Email ou mot de passe incorrect.'
   if (/email not confirmed/i.test(raw)) return 'Confirmez d’abord votre adresse : un lien vous a été envoyé par email.'
   if (/user already registered/i.test(raw)) return 'Un compte existe déjà avec cet email. Connectez-vous.'

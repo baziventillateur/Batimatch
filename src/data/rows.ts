@@ -6,6 +6,7 @@ import {
   type Consultation,
   type DpgfItem,
   type Extra,
+  type TechNote,
   type Offer,
   type PriceValue,
   type Profile,
@@ -106,6 +107,7 @@ export interface OfferRow {
   valid_until: string | null
   reserves: string
   message: string
+  tech_note?: TechNote | null
   submitted_at: string | null
   updated_at?: string
 }
@@ -195,6 +197,7 @@ export const toOffer = (r: OfferRow): Offer => ({
   validUntil: r.valid_until ?? null,
   reserves: r.reserves ?? '',
   message: r.message ?? '',
+  techNote: r.tech_note ?? null,
 })
 
 export const fromOffer = (o: Offer, lotId: string): OfferRow => ({
@@ -218,6 +221,7 @@ export const fromOffer = (o: Offer, lotId: string): OfferRow => ({
   valid_until: o.validUntil,
   reserves: o.reserves,
   message: o.message,
+  tech_note: o.techNote ?? null,
   submitted_at: o.submittedAt,
 })
 

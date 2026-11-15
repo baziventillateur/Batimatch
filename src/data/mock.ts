@@ -4,6 +4,8 @@ import type { Backend, OfferLite } from './backend'
 import type { CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 import { uid } from '../lib/id'
 
+const files = new Map<string, Blob>()
+
 interface Db {
   users: { id: string; email: string; password: string }[]
   profiles: ProfileRow[]
@@ -331,6 +333,24 @@ export function createMockBackend(): Backend {
       }
       save()
       await delay(null)
+    },
+    async uploadOfferFile(lotId, folder, offerId, file) {
+      const mine = folder === me() && hasAccess(lotId) && lotOpen(lotId)
+      if (!mine && !(folder === 'manual' && isOwner(lotProject(lotId)))) deny()
+      if (file.type !== 'application/pdf') throw new Error('mime type not supported')
+      const path = `${lotId}/${folder}/${offerId}.pdf`
+      // En démonstration, le fichier reste en mémoire : il disparaît au rechargement de la page
+      files.set(path, file)
+      await delay(null)
+      return { path, name: file.name, size: file.size, at: now() }
+    },
+    async removeOfferFile(path) {
+      files.delete(path)
+    },
+    async offerFileUrl(path) {
+      const f = files.get(path)
+      if (!f) throw new Error('En démonstration, le fichier n’est conservé que jusqu’au rechargement de la page.')
+      return URL.createObjectURL(f)
     },
     async deleteOffer(id) {
       const o = db.offers.find((x) => x.id === id)

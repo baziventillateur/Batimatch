@@ -505,3 +505,66 @@ create policy logos_update on storage.objects for update to authenticated
   using (bucket_id = 'logos' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy logos_delete on storage.objects for delete to authenticated
   using (bucket_id = 'logos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ─── Notice technique jointe à une offre (PDF facultatif) ───────────────────
+-- offers.tech_note = { path, name, size, at } ; le fichier est dans le dossier privé « offer-files ».
+-- Chemin : <lot>/<compte entreprise>/<offre>.pdf, ou <lot>/manual/<offre>.pdf pour une offre saisie par l'acheteur.
+alter table public.offers add column if not exists tech_note jsonb;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('offer-files', 'offer-files', false, 10485760, array['application/pdf'])
+on conflict (id) do nothing;
+
+-- Dépôt : l'entreprise acceptée sur un lot ouvert, dans son dossier ; l'acheteur pour ses offres manuelles
+create or replace function public.offer_file_writable(p_name text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.lots l
+    where l.id::text = (storage.foldername(p_name))[1]
+      and (
+        ((storage.foldername(p_name))[2] = auth.uid()::text and public.is_lot_member(l.id) and public.lot_open(l.id))
+        or ((storage.foldername(p_name))[2] = 'manual' and public.is_lot_owner(l.id))
+      )
+  );
+$$;
+
+-- Lecture : l'entreprise pour son dossier ; l'acheteur une fois l'offre envoyée
+create or replace function public.offer_file_readable(p_name text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.lots l
+    where l.id::text = (storage.foldername(p_name))[1]
+      and (
+        (storage.foldername(p_name))[2] = auth.uid()::text
+        or (
+          public.is_lot_owner(l.id)
+          and (
+            (storage.foldername(p_name))[2] = 'manual'
+            or exists (
+              select 1 from public.offers o
+              where o.lot_id = l.id and o.company_id::text = (storage.foldername(p_name))[2] and o.status = 'submitted'
+            )
+          )
+        )
+      )
+  );
+$$;
+revoke all on function public.offer_file_writable(text) from public;
+revoke all on function public.offer_file_readable(text) from public;
+grant execute on function public.offer_file_writable(text) to authenticated;
+grant execute on function public.offer_file_readable(text) to authenticated;
+
+drop policy if exists offer_files_read on storage.objects;
+drop policy if exists offer_files_insert on storage.objects;
+drop policy if exists offer_files_update on storage.objects;
+drop policy if exists offer_files_delete on storage.objects;
+
+create policy offer_files_read on storage.objects for select to authenticated
+  using (bucket_id = 'offer-files' and public.offer_file_readable(name));
+create policy offer_files_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'offer-files' and public.offer_file_writable(name));
+create policy offer_files_update on storage.objects for update to authenticated
+  using (bucket_id = 'offer-files' and public.offer_file_writable(name))
+  with check (bucket_id = 'offer-files' and public.offer_file_writable(name));
+create policy offer_files_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'offer-files' and public.offer_file_writable(name));

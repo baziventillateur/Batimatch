@@ -90,6 +90,7 @@ export function strengthsAndWeaknesses(a: Analysis, r: OfferResult) {
   }
   const variants = r.offer.extras.filter((e) => e.kind === 'variante')
   if (variants.some((e) => e.amount < 0)) plus.push(`Propose ${variants.length > 1 ? 'des variantes' : 'une variante'} d’économie`)
+  if (r.offer.techNote) plus.push('Notice technique fournie')
   if (r.offer.reserves.trim()) minus.push('Émet des réserves')
   if (r.offer.validUntil && r.offer.validUntil < today) minus.push('Offre expirée')
   // Chapitre où l'entreprise est la moins chère

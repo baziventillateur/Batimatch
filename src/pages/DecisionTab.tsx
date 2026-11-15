@@ -13,6 +13,7 @@ import { uid } from '../lib/id'
 import type { Consultation, Criterion, Verdict } from '../lib/types'
 import { AnimatedNumber, Button, CompanyLogo, EmptyState, IconButton, Spinner, cx } from '../components/ui'
 import { ContactLine } from './OfferEditor'
+import { TechNoteBadge } from '../components/TechNote'
 
 const fmtScore = (v: number) => fmtNum(Math.round(v * 10) / 10)
 
@@ -298,6 +299,7 @@ function OfferCard({ c, a, s }: { c: Consultation; a: Analysis; s: ScoredOffer }
         <div className="min-w-0 flex-1 pr-16">
           <h3 className="truncate text-[1.1875rem] leading-tight font-semibold">{r.label}</h3>
           <ContactLine offer={o} />
+          <TechNoteBadge c={c} offer={o} className="mt-1" />
         </div>
       </header>
 

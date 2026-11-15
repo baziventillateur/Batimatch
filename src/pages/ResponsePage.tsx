@@ -11,6 +11,7 @@ import type { Consultation, Offer } from '../lib/types'
 import { Button, CompanyLogo, Dialog, ErrorBox, Field, Loading, NumberInput, Spinner, cx, dueLabel } from '../components/ui'
 import { ExtrasEditor, MobileTotalBar, PriceGrid, Recap, useOfferTotals } from './OfferEditor'
 import { SaveIndicator } from './ConsultationLayout'
+import { TechNoteField } from '../components/TechNote'
 import { StatusPill } from './ProjectPage'
 
 /** Espace entreprise : répondre à un lot (DPGF), jusqu'à la date de rendu */
@@ -207,6 +208,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
             <Field label="Message à l’acheteur" htmlFor="r-msg">
               <textarea id="r-msg" rows={2} disabled={closed} className="field resize-y text-[0.875rem] disabled:bg-paper" placeholder="Moyens, références, disponibilité…" value={offer.message} onChange={(e) => updateOffer(c.id, offer.id, { message: e.target.value })} />
             </Field>
+            <TechNoteField c={c} offer={offer} editable={!closed} folder={offer.companyId ?? ''} />
           </section>
         </div>
 

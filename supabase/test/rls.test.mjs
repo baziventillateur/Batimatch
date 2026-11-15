@@ -180,4 +180,18 @@ await as(C1, `insert into storage.objects (bucket_id, name) values ('logos', '${
 await fails(C1, `insert into storage.objects (bucket_id, name) values ('logos', '${C2}/logo.png')`, 'logo dans le dossier d’un autre')
 console.log('✓ stockage des logos cloisonné')
 
+// Notice technique : dépôt dans son dossier sur un lot accessible, lecture par l'acheteur une fois l'offre envoyée
+const f1 = `${lid}/${C1}/${oid}.pdf`
+await as(C1, `insert into storage.objects (bucket_id, name) values ('offer-files', $1)`, [f1])
+await fails(C2, `insert into storage.objects (bucket_id, name) values ('offer-files', '${lid}/${C2}/x.pdf')`, 'notice sans accès au lot')
+await fails(C2, `insert into storage.objects (bucket_id, name) values ('offer-files', '${lid}/${C1}/x.pdf')`, 'notice dans le dossier d’un autre')
+await fails(C1, `insert into storage.objects (bucket_id, name) values ('offer-files', '${lid}/manual/x.pdf')`, 'notice au nom de l’acheteur')
+assert.equal((await as(C1, `select name from storage.objects where bucket_id = 'offer-files'`)).rows.length, 1)
+assert.equal((await as(C2, `select name from storage.objects where bucket_id = 'offer-files'`)).rows.length, 0, 'notice invisible des concurrents')
+const st = (await as(B, `select status from public.offers where id = $1`, [oid])).rows[0]?.status
+assert.equal((await as(B, `select name from storage.objects where bucket_id = 'offer-files'`)).rows.length, st === 'submitted' ? 1 : 0)
+await as(B, `insert into storage.objects (bucket_id, name) values ('offer-files', '${lid}/manual/y.pdf')`)
+await as(C1, `update public.offers set tech_note = '{"path":"p","name":"n.pdf","size":1,"at":"x"}' where id = $1`, [oid])
+console.log('✓ notice technique : dépôt cloisonné, lecture par l’acheteur après envoi')
+
 console.log('\nTous les tests de sécurité passent.')

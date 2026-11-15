@@ -11,6 +11,7 @@ import { guessPriceColumn, parseNumber, parsePrice, splitClipboard } from '../li
 import { resizeImage } from '../lib/image'
 import type { Consultation, DpgfItem, ExtraKind, Offer, PriceValue } from '../lib/types'
 import { uid } from '../lib/id'
+import { TechNoteField } from '../components/TechNote'
 import { Button, CompanyLogo, Descriptif, DeviationChip, Dialog, EmptyState, Field, IconButton, NumberInput, Progress, Segmented, Spinner, Toggle, cx, useAutoSelect } from '../components/ui'
 
 // ═════════════════════════ Page acheteur : détail d'une offre ═════════════════════════
@@ -102,6 +103,7 @@ function BuyerOffer({ offer }: { offer: Offer }) {
             <Field label="Réserves et exclusions" htmlFor="o-res" hint="Reprises dans les points de vigilance du comparatif.">
               <textarea id="o-res" rows={3} disabled={readOnly} className="field resize-y text-[0.875rem] disabled:bg-paper" value={offer.reserves} onChange={(e) => updateOffer(c.id, offer.id, { reserves: e.target.value })} />
             </Field>
+            <TechNoteField c={c} offer={offer} editable={!readOnly} folder="manual" />
           </section>
           <div className="no-print flex flex-wrap gap-2">
             <Button

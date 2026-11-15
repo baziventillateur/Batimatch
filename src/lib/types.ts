@@ -69,6 +69,15 @@ export interface Contact {
 export type OfferSource = 'platform' | 'manual'
 export type OfferStatus = 'draft' | 'submitted'
 
+/** Notice technique jointe à une offre : un PDF facultatif */
+export interface TechNote {
+  /** Chemin du fichier dans le stockage */
+  path: string
+  name: string
+  size: number
+  at: string
+}
+
 export interface Offer {
   id: string
   /** Compte de l'entreprise (null pour une offre saisie par l'acheteur) */
@@ -91,6 +100,8 @@ export interface Offer {
   reserves: string
   /** Message de l'entreprise à l'acheteur */
   message: string
+  /** Notice technique (PDF) jointe par l'entreprise, facultative */
+  techNote?: TechNote | null
 }
 
 export type FillMode = 'median' | 'max' | 'none'

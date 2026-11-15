@@ -10,6 +10,7 @@ import { exportComparison } from '../lib/io'
 import type { Consultation, FillMode } from '../lib/types'
 import { Button, CompanyLogo, EmptyState, Segmented, Toggle, cx, useTip } from '../components/ui'
 import { ParetoList, RankingChart, VersionChart } from '../components/charts'
+import { TechNoteBadge } from '../components/TechNote'
 
 export default function CompareTab() {
   const c = useC()
@@ -358,6 +359,7 @@ function SummaryTable({ c, a, colorOf }: { c: Consultation; a: Analysis; colorOf
         ),
     },
     { label: 'Note prix', render: (r) => (r.priceScore != null ? `${fmtNum(Math.round(r.priceScore * 100) / 100)} / 20` : '—') },
+    { label: 'Notice technique', hint: 'PDF facultatif joint par l’entreprise : un signe de sérieux à prendre en compte dans la note technique.', render: (r) => <TechNoteBadge c={c} offer={r.offer} /> },
     {
       label: 'Réserves',
       wrap: true,
