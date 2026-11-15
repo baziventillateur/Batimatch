@@ -6,7 +6,7 @@ L'acheteur crée un projet et ses lots (une DPGF et une date de rendu par lot) p
 Les entreprises s'inscrivent, saisissent le code et répondent en ligne. Le comparatif et l'aide à la
 décision se construisent automatiquement.
 
-En ligne : https://baziventillateur.github.io/Batimatch/
+En ligne : https://batimatch.paceapp.fr/
 
 ## Parcours
 

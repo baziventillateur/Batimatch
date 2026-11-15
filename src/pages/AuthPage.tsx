@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react'
-import { Building2, HardHat, MailCheck } from 'lucide-react'
+import { useEffect, useState, type CSSProperties, type FormEvent, type PointerEvent } from 'react'
+import { Building2, CalendarClock, HardHat, MailCheck } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import { pendingCode, useAuth } from '../data/auth'
 import type { Role } from '../lib/types'
@@ -40,46 +40,60 @@ export default function AuthPage() {
     }
   }
 
+  // Parallaxe légère : la scène suit le pointeur (souris uniquement)
+  const onMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse') return
+    const el = e.currentTarget
+    const r = el.getBoundingClientRect()
+    el.style.setProperty('--px', (((e.clientX - r.left) / r.width) * 2 - 1).toFixed(3))
+    el.style.setProperty('--py', (((e.clientY - r.top) / r.height) * 2 - 1).toFixed(3))
+  }
+
   return (
-    <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
-      {/* Panneau de présentation */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden bg-night p-10 text-white lg:flex">
-        <div className="flex items-center gap-2.5">
+    <div className="auth-bg relative min-h-dvh overflow-hidden bg-night text-white" onPointerMove={onMove}>
+      <div className="auth-glow" aria-hidden="true" />
+      <div className="auth-grid" aria-hidden="true" />
+
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-[1200px] flex-col px-4 sm:px-8 lg:px-12">
+        <header className="auth-in flex items-center gap-2.5 py-5 lg:py-8">
           <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
             <rect width="32" height="32" rx="6" fill="#F3F5F8" />
             <rect x="6" y="19" width="5" height="7" fill="#1B2A3A" />
             <rect x="13.5" y="13" width="5" height="13" fill="#1B2A3A" />
             <rect x="21" y="8" width="5" height="18" fill="#F8E04E" />
           </svg>
-          <span className="font-title text-[1.625rem] font-bold">Batimatch</span>
-        </div>
-        <div className="max-w-[30rem]">
-          <h1 className="font-title text-[2.875rem] leading-[1.02] font-bold">
-            Vos consultations d’entreprises, de la DPGF au <span className="marker marker-strong anim-marker">bon choix</span>.
-          </h1>
-          <ul className="mt-8 grid gap-4 text-[1rem] text-white/85">
-            <li>L’acheteur publie ses lots avec une date de rendu et partage un code projet.</li>
-            <li>Les entreprises répondent en ligne, prix unitaires, variantes et options.</li>
-            <li>Le comparatif et l’aide à la décision se construisent tout seuls.</li>
-          </ul>
-        </div>
-        <Bars />
-      </aside>
+          <span className="grid leading-none">
+            <span className="font-title text-[1.625rem] leading-none font-bold">Batimatch</span>
+            <a href="https://paceapp.fr" target="_blank" rel="noreferrer" className="auth-by mt-1 text-[0.75rem] text-white/55 hover:text-white">
+              by <span className="font-semibold text-white/85">PaceApp</span>
+            </a>
+          </span>
+        </header>
 
-      {/* Formulaire */}
-      <main className="flex items-center justify-center px-4 py-10 sm:px-8">
-        <div className="w-full max-w-[440px]">
-          <div className="mb-6 flex items-center gap-2.5 lg:hidden">
-            <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
-              <rect width="32" height="32" rx="6" fill="var(--color-ink)" />
-              <rect x="6" y="19" width="5" height="7" fill="var(--color-sheet)" />
-              <rect x="13.5" y="13" width="5" height="13" fill="var(--color-sheet)" />
-              <rect x="21" y="8" width="5" height="18" fill="#F8E04E" />
-            </svg>
-            <span className="font-title text-[1.4375rem] font-bold">Batimatch</span>
-          </div>
-          <p className="-mt-3 mb-6 text-[0.9375rem] text-ink-2 lg:hidden">Vos consultations d’entreprises, de la DPGF au bon choix.</p>
+        <div className="grid flex-1 content-start items-center gap-5 pb-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:content-center lg:gap-16 lg:pb-16 xl:gap-24">
+          {/* Présentation */}
+          <section className="hidden lg:block">
+            <h1 className="auth-in max-w-[34rem] font-title text-[3.25rem] leading-[1.02] font-bold xl:text-[3.625rem]" style={{ animationDelay: '0.08s' }}>
+              Vos consultations d’entreprises, de la DPGF au <span className="marker marker-strong anim-marker">bon choix</span>.
+            </h1>
+            <ol className="auth-steps mt-7 grid max-w-[31rem] gap-3 text-[1rem] text-white/85">
+              <li className="auth-in" style={{ animationDelay: '0.22s' }}>
+                L’acheteur publie ses lots avec une date de rendu et partage un code projet.
+              </li>
+              <li className="auth-in" style={{ animationDelay: '0.34s' }}>
+                Les entreprises répondent en ligne, prix unitaires, variantes et options.
+              </li>
+              <li className="auth-in" style={{ animationDelay: '0.46s' }}>
+                Le comparatif et l’aide à la décision se construisent tout seuls.
+              </li>
+            </ol>
+            <Scene />
+          </section>
 
+          <p className="auth-in text-[1rem] text-white/80 lg:hidden">Vos consultations d’entreprises, de la DPGF au bon choix.</p>
+
+          {/* Formulaire */}
+          <main className="auth-card w-full max-w-[440px] justify-self-center rounded-xl bg-sheet p-5 text-ink sm:p-8 lg:justify-self-end">
           {code && (
             <p className="mb-5 rounded-md border border-plan/25 bg-plan-soft px-4 py-3 text-[0.9062rem]">
               Vous avez été invité sur un projet (code <strong className="num tracking-wider">{code}</strong>). Créez votre compte entreprise ou
@@ -200,24 +214,95 @@ export default function AuthPage() {
               </form>
             </>
           )}
+          </main>
         </div>
-      </main>
+      </div>
     </div>
   )
 }
 
-/** Barres qui montent : un clin d'œil au comparatif */
-function Bars() {
-  const bars = [46, 72, 58, 92, 64]
+const OFFERS = [
+  { name: 'Entreprise A', amount: 412300 },
+  { name: 'Entreprise B', amount: 386900 },
+  { name: 'Entreprise C', amount: 428750 },
+]
+
+/** Montant qui défile jusqu'à sa valeur, une seule fois à l'arrivée sur la page */
+function CountUp({ to, delay }: { to: number; delay: number }) {
+  const [v, setV] = useState(0)
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return setV(to)
+    let raf = 0
+    const start = performance.now() + delay
+    const tick = (now: number) => {
+      const t = Math.min(1, Math.max(0, (now - start) / 900))
+      setV(Math.round(to * (1 - Math.pow(1 - t, 3))))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [to, delay])
+  return <>{v.toLocaleString('fr-FR')} €</>
+}
+
+/** Aperçu d'un comparatif : trois offres, le surligneur passe sur la moins-disante */
+function Scene() {
+  const max = Math.max(...OFFERS.map((o) => o.amount))
+  const min = Math.min(...OFFERS.map((o) => o.amount))
   return (
-    <div className="flex h-32 items-end gap-3" aria-hidden="true">
-      {bars.map((h, i) => (
-        <span
-          key={i}
-          className="anim-rise w-10 rounded-t-[4px]"
-          style={{ height: `${h}%`, background: i === 1 ? 'var(--color-marker)' : 'rgb(255 255 255 / 0.18)', animationDelay: `${0.15 + i * 0.09}s` }}
-        />
-      ))}
+    <div className="auth-scene relative mt-10 h-[15rem] max-w-[33rem]" aria-hidden="true">
+      <div className="auth-layer absolute -top-3 right-0" style={{ '--depth': '22px' } as CSSProperties}>
+        <div className="auth-chip auth-float anim-pop" style={{ animationDelay: '1.1s, 1.6s' }}>
+          <span className="text-[0.75rem] text-white/60">Code projet</span>
+          <span className="num text-[1rem] font-semibold tracking-[0.14em]">BM-4F7K</span>
+        </div>
+      </div>
+
+      <div className="auth-layer auth-tilt absolute top-5 left-0 w-[27rem]" style={{ '--depth': '10px' } as CSSProperties}>
+        <div className="auth-glass anim-pop rounded-lg p-4" style={{ animationDelay: '0.55s' }}>
+          <div className="mb-3 flex items-baseline justify-between">
+            <span className="font-title text-[1.1875rem] font-bold">Lot 03, gros œuvre</span>
+            <span className="text-[0.8125rem] text-white/60">3 offres reçues</span>
+          </div>
+          <div className="grid gap-2.5">
+            {OFFERS.map((o, i) => {
+              const best = o.amount === min
+              const d = 0.8 + i * 0.14
+              return (
+                <div key={o.name} className="grid grid-cols-[6.25rem_1fr_7rem] items-center gap-3 text-[0.875rem]">
+                  <span className={best ? 'font-semibold' : 'text-white/75'}>{o.name}</span>
+                  <span className="h-2.5 overflow-hidden rounded-full bg-white/10">
+                    <span
+                      className="anim-grow block h-full rounded-full"
+                      style={{ width: `${(o.amount / max) * 100}%`, background: best ? 'var(--color-marker)' : 'rgb(255 255 255 / 0.32)', animationDelay: `${d}s` }}
+                    />
+                  </span>
+                  <span className="num pr-1 text-right">
+                    {best ? (
+                      <span className="marker anim-marker font-semibold" style={{ animationDelay: '2s' }}>
+                        <CountUp to={o.amount} delay={d * 1000} />
+                      </span>
+                    ) : (
+                      <span className="text-white/75">
+                        <CountUp to={o.amount} delay={d * 1000} />
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="auth-layer absolute bottom-0 left-[17.5rem]" style={{ '--depth': '30px' } as CSSProperties}>
+        <div className="auth-chip auth-float anim-pop" style={{ animationDelay: '1.3s, 2.4s' }}>
+          <span className="text-[0.75rem] text-white/60">Rendu des offres</span>
+          <span className="flex items-center gap-1.5 text-[1rem] font-semibold">
+            <CalendarClock size={16} className="text-marker" /> J−3
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

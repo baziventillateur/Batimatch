@@ -17,7 +17,7 @@ const GROUPS: { title: string; items: LinkItem[] }[] = [
   {
     title: 'Production',
     items: [
-      { label: 'Application en production', href: 'https://baziventillateur.github.io/Batimatch/', note: 'Site public GitHub Pages' },
+      { label: 'Application en production', href: 'https://batimatch.paceapp.fr/', note: 'Site public (GitHub Pages)' },
       { label: 'Dernier déploiement', href: `${REPO}/actions`, note: 'Workflow « pages » : test, build, publication' },
       { label: 'Réglages GitHub Pages', href: `${REPO}/settings/pages`, note: 'Source doit être « GitHub Actions »' },
     ],
