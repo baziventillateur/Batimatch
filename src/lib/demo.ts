@@ -7,6 +7,14 @@ import { uid } from './id'
 
 type Row = [ref: string, label: string, unit?: string, qty?: number, refPu?: number, scope?: 'base' | 'option']
 
+/** Descriptifs d'exemple, pour montrer le dépliage dans le DPGF */
+const DESCRIPTIONS: Record<string, string> = {
+  '1.1':
+    'Amenée, installation et repli du matériel nécessaire aux travaux de VRD. Comprend la base vie, les clôtures de chantier, la signalisation temporaire, les branchements provisoires et le nettoyage des voiries pendant toute la durée des travaux.\nRemise en état des emprises en fin de chantier.',
+  '1.3':
+    'Sciage soigné des rives, démolition des enrobés sur toute leur épaisseur, chargement et évacuation en centre agréé.\nY compris bordereaux de suivi des déchets et sujétions liées aux réseaux existants.',
+}
+
 const ROWS: Row[] = [
   ['1', 'Installation et préparation'],
   ['1.1', 'Installation de chantier VRD, amenée et repli du matériel', 'ft', 1, 18000],
@@ -59,7 +67,7 @@ export interface DemoBundle {
 export function buildDemo(): DemoBundle {
   const items: DpgfItem[] = ROWS.map(([ref, label, unit, qty, , scope]) =>
     unit
-      ? newItem({ ref, label, unit, qty: qty ?? null, scope: scope ?? 'base' })
+      ? newItem({ ref, label, unit, qty: qty ?? null, scope: scope ?? 'base', ...(DESCRIPTIONS[ref] ? { description: DESCRIPTIONS[ref] } : {}) })
       : newItem({ kind: 'chapter', ref, label, unit: '', qty: null }),
   )
   const refPu = new Map<string, number>()

@@ -11,7 +11,7 @@ import { guessPriceColumn, parseNumber, parsePrice, splitClipboard } from '../li
 import { resizeImage } from '../lib/image'
 import type { Consultation, DpgfItem, ExtraKind, Offer, PriceValue } from '../lib/types'
 import { uid } from '../lib/id'
-import { Button, CompanyLogo, DeviationChip, Dialog, EmptyState, Field, IconButton, NumberInput, Progress, Segmented, Spinner, Toggle, cx, useAutoSelect } from '../components/ui'
+import { Button, CompanyLogo, Descriptif, DeviationChip, Dialog, EmptyState, Field, IconButton, NumberInput, Progress, Segmented, Spinner, Toggle, cx, useAutoSelect } from '../components/ui'
 
 // ═════════════════════════ Page acheteur : détail d'une offre ═════════════════════════
 
@@ -565,6 +565,7 @@ const PriceRow = memo(function PriceRow({
           {item.label || <span className="text-ink-3">Sans désignation</span>}
           {item.scope === 'option' && <span className="ml-2 rounded-[3px] bg-plan-soft px-1 text-[0.7188rem] font-semibold text-plan-dark">PSE</span>}
         </p>
+        <Descriptif className="-ml-1.5" value={item.description ?? ''} />
         <p className="num mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.7812rem] text-ink-3 md:hidden">
           <span>
             {fmtNum(item.qty)} {item.unit}

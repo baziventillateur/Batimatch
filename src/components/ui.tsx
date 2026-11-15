@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import { parseNumber } from '../lib/parse'
 import { fmtNum } from '../lib/format'
 
@@ -552,4 +552,86 @@ export function dueLabel(days: number | null): { text: string; tone: 'muted' | '
   if (days === 0) return { text: 'clôture ce soir', tone: 'warn' }
   if (days === 1) return { text: 'clôture demain', tone: 'warn' }
   return { text: `J−${days}`, tone: days <= 3 ? 'warn' : 'muted' }
+}
+
+// ————————————————————————— Descriptif dépliable —————————————————————————
+
+/**
+ * Descriptif d'un poste : une ligne tronquée, qui se déplie au clic.
+ * Avec onChange, le texte déplié est modifiable ; sinon il est en lecture seule.
+ */
+export function Descriptif({
+  value,
+  onChange,
+  label = 'Descriptif',
+  className,
+}: {
+  value: string
+  onChange?: (v: string) => void
+  label?: string
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const area = useRef<HTMLTextAreaElement>(null)
+  const prevH = useRef<number | null>(null)
+  const editable = !!onChange
+
+  const fit = () => {
+    const el = area.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+
+  // Déroulé : on anime la hauteur entre l'état replié et l'état déplié
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el) return
+    if (open) fit()
+    const from = prevH.current
+    const to = el.offsetHeight
+    prevH.current = to
+    if (from == null || from === to || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    el.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 200, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' })
+  }, [open])
+
+  if (!value && !editable) return null
+
+  const toggle = () => {
+    prevH.current = box.current?.offsetHeight ?? null
+    setOpen((o) => !o)
+  }
+  const text = 'font-cond text-[0.75rem] leading-[1.35] text-ink-3'
+
+  return (
+    <div ref={box} className={cx('min-w-0 overflow-hidden', className)}>
+      {open && editable ? (
+        <textarea
+          ref={area}
+          autoFocus
+          aria-label={label}
+          rows={2}
+          placeholder="Décrivez la prestation : matériaux, mise en œuvre, sujétions, localisation…"
+          className={cx(text, 'block w-full resize-none rounded-[4px] border border-plan bg-sheet px-1.5 py-1 text-ink-2 placeholder:text-ink-3 focus:outline-none')}
+          value={value}
+          onChange={(e) => (onChange(e.target.value), fit())}
+          onBlur={toggle}
+          onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
+        />
+      ) : (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={toggle}
+          className={cx(text, 'flex w-full items-start gap-1 rounded-[4px] px-1.5 py-0.5 text-left hover:text-ink-2')}
+        >
+          <span className={cx('min-w-0 flex-1', open ? 'whitespace-pre-wrap text-ink-2' : 'truncate', !value && 'italic opacity-70')}>
+            {value || 'Ajouter un descriptif'}
+          </span>
+          {value && <ChevronDown size={13} className={cx('mt-px shrink-0 transition-transform duration-200', open && 'rotate-180')} aria-hidden="true" />}
+        </button>
+      )}
+    </div>
+  )
 }

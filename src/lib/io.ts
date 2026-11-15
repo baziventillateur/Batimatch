@@ -36,11 +36,11 @@ export function exportBlankDpgf(c: Consultation) {
     [c.affaire, c.lot || c.name],
     [`Remise des offres : ${c.dueDate ?? ''}`],
     [],
-    ['N°', 'Désignation', 'Unité', 'Quantité', 'PU HT', 'Montant HT'],
+    ['N°', 'Désignation', 'Descriptif', 'Unité', 'Quantité', 'PU HT', 'Montant HT'],
   ]
   for (const it of c.items) {
     if (it.kind === 'chapter') rows.push([it.ref, it.label.toUpperCase()])
-    else rows.push([it.ref, it.scope === 'option' ? `${it.label} (PSE)` : it.label, it.unit, it.qty, null, null])
+    else rows.push([it.ref, it.scope === 'option' ? `${it.label} (PSE)` : it.label, it.description ?? '', it.unit, it.qty, null, null])
   }
   download(`dpgf-${slug(c.lot || c.name)}.csv`, toCsv(rows), 'text/csv;charset=utf-8')
 }

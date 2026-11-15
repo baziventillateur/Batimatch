@@ -19,7 +19,7 @@ import { UNITS, guessDpgfColumns, rowsToItems, splitClipboard, type ColumnRole }
 import { exportBlankDpgf } from '../lib/io'
 import { fmtEur } from '../lib/format'
 import type { DpgfItem } from '../lib/types'
-import { AnimatedNumber, Button, Dialog, EmptyState, Menu, MenuItem, NumberInput, Segmented, Toggle, cx } from '../components/ui'
+import { AnimatedNumber, Button, Descriptif, Dialog, EmptyState, Menu, MenuItem, NumberInput, Segmented, Toggle, cx } from '../components/ui'
 
 /** Propose le numéro suivant : « 2.3 » → « 2.4 », « PSE 1 » → « PSE 2 » */
 function nextRef(prev: string | undefined, kind: DpgfItem['kind'], items: DpgfItem[]): string {
@@ -220,7 +220,15 @@ export default function DpgfTab() {
                 onKeyDown={(e) => onEnter(e, idx, 'label')}
               />
               {it.kind === 'line' && (
-                <div className="col-span-full row-start-2 flex items-center gap-1.5 md:contents">
+                <Descriptif
+                  className="col-span-2 col-start-2 row-start-2 md:col-start-2 md:col-end-7 md:row-start-2"
+                  label={`Descriptif, ${it.ref} ${it.label}`}
+                  value={it.description ?? ''}
+                  onChange={(description) => updateItem(c.id, it.id, { description })}
+                />
+              )}
+              {it.kind === 'line' && (
+                <div className="col-span-full row-start-3 flex items-center gap-1.5 md:contents">
                   <input
                     aria-label="Unité"
                     list="units"
@@ -348,7 +356,7 @@ export default function DpgfTab() {
   )
 }
 
-const ROLE_LABEL: Record<ColumnRole, string> = { ref: 'N°', label: 'Désignation', unit: 'Unité', qty: 'Quantité', ignore: 'Ignorer' }
+const ROLE_LABEL: Record<ColumnRole, string> = { ref: 'N°', label: 'Désignation', desc: 'Descriptif', unit: 'Unité', qty: 'Quantité', ignore: 'Ignorer' }
 
 function PasteDpgfDialog({
   open,

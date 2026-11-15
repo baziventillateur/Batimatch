@@ -79,7 +79,7 @@ const looksLikeUnit = (s: string) => {
 }
 const looksLikeRef = (s: string) => /^[A-Za-z]{0,4}\s?[\d]+([.-][\dA-Za-z]+)*\.?$/.test(s.trim()) && s.trim().length <= 12
 
-export type ColumnRole = 'ref' | 'label' | 'unit' | 'qty' | 'ignore'
+export type ColumnRole = 'ref' | 'label' | 'desc' | 'unit' | 'qty' | 'ignore'
 
 /** Devine le rôle de chaque colonne d'un collage de DPGF. */
 export function guessDpgfColumns(rows: string[][]): ColumnRole[] {
@@ -132,6 +132,7 @@ export function rowsToItems(rows: string[][], roles: ColumnRole[], chaptersFromE
       kind: isChapter ? 'chapter' : 'line',
       ref,
       label: label || ref,
+      ...(!isChapter && col(r, 'desc') ? { description: col(r, 'desc') } : {}),
       unit: isChapter ? '' : unit,
       qty: isChapter ? null : qty,
       scope: /^(pse|option|opt\.?)\b/i.test(ref) || /^(pse|option)\b/i.test(label) ? 'option' : 'base',

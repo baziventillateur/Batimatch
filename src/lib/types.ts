@@ -36,6 +36,8 @@ export interface DpgfItem {
   /** Numérotation libre : « 2.3 », « PSE 1 »… */
   ref: string
   label: string
+  /** Descriptif détaillé de la prestation, lu par les entreprises */
+  description?: string
   unit: string
   qty: number | null
   scope: LineScope
