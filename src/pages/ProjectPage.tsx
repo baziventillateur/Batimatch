@@ -4,7 +4,7 @@ import { Check, ChevronLeft, Clock, Copy, EyeOff, Lock, Mail, MoreHorizontal, Pa
 import { api, errorMessage } from '../data'
 import { useAuth } from '../data/auth'
 import type { ProjectBundle } from '../data/backend'
-import type { LotStatus } from '../data/rows'
+import type { AccessStatus, LotStatus } from '../data/rows'
 import { DEFAULT_SETTINGS, type Offer } from '../lib/types'
 import { declaredBase, linesOf } from '../lib/calc'
 import { daysUntil, fmtDate, fmtEur, fmtPctSigned, todayIso } from '../lib/format'
@@ -279,7 +279,7 @@ function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload:
 /** Demandes d'accès aux lots : l'acheteur accepte ou refuse chaque entreprise, lot par lot */
 function AccessRequests({ b, reload }: { b: ProjectBundle; reload: () => void }) {
   const [busy, setBusy] = useState<string | null>(null)
-  const order = { pending: 0, approved: 1, refused: 2 }
+  const order: Record<AccessStatus, number> = { pending: 0, approved: 1, declined: 2, refused: 3 }
   const rows = [...b.access].sort((x, y) => order[x.status] - order[y.status] || y.requested_at.localeCompare(x.requested_at))
   if (!rows.length) return null
   const pending = rows.filter((r) => r.status === 'pending').length
@@ -312,8 +312,10 @@ function AccessRequests({ b, reload }: { b: ProjectBundle; reload: () => void })
               <div className="min-w-[9rem] flex-1">
                 <p className="font-semibold leading-snug">{name}</p>
                 <p className="text-[0.8438rem] leading-snug">
-                  <span className="text-ink-3">demande l’accès à</span> <span className="font-medium">{lot?.name || 'un lot'}</span>
+                  <span className="text-ink-3">{r.status === 'declined' ? 'ne répond pas à' : 'demande l’accès à'}</span>{' '}
+                  <span className="font-medium">{lot?.name || 'un lot'}</span>
                 </p>
+                {r.status === 'declined' && r.comment && <p className="mt-0.5 text-[0.8438rem] italic text-ink-2">« {r.comment} »</p>}
                 <p className="flex flex-wrap gap-x-3 text-[0.8125rem] text-ink-2">
                   <span>{[p?.first_name, p?.last_name].filter(Boolean).join(' ')}</span>
                   {p?.email && (
@@ -347,6 +349,10 @@ function AccessRequests({ b, reload }: { b: ProjectBundle; reload: () => void })
                       Retirer
                     </Button>
                   </>
+                ) : r.status === 'declined' ? (
+                  <Button size="sm" variant="ghost" disabled={busy === key} onClick={() => decide(r.lot_id, r.user_id, 'refused')}>
+                    Refuser
+                  </Button>
                 ) : (
                   <>
                     <span className="text-[0.8125rem] text-ink-3">Refusée</span>
@@ -553,6 +559,31 @@ function LotFormBody({ onClose, projectId, position, onCreated }: { onClose: () 
 function CompanyProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
   const { userId } = useAuth()
   const [asking, setAsking] = useState<string | null>(null)
+  const [declining, setDeclining] = useState<ProjectBundle['catalog'][number] | null>(null)
+  const [reason, setReason] = useState('')
+  const [declineBusy, setDeclineBusy] = useState(false)
+  const submitDecline = async () => {
+    if (!declining || reason.trim().length < 3) return
+    setDeclineBusy(true)
+    try {
+      await api.declineLot(declining.id, reason)
+      setDeclining(null)
+      setReason('')
+      reload()
+    } catch (e) {
+      alert(errorMessage(e))
+    } finally {
+      setDeclineBusy(false)
+    }
+  }
+  const undecline = async (lotId: string) => {
+    try {
+      await api.undeclineLot(lotId)
+      reload()
+    } catch (e) {
+      alert(errorMessage(e))
+    }
+  }
   const owner = b.owner
   const ownerName = owner?.company_name || [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') || 'L’acheteur'
   return (
@@ -624,12 +655,38 @@ function CompanyProject({ b, reload }: { b: ProjectBundle; reload: () => void })
             return (
               <li key={lot.id}>
                 {open ? (
-                  <Link to={`/p/${b.project.id}/l/${lot.id}`} className="panel group flex h-full flex-col gap-2.5 p-4 hover:border-ink-3">
+                  <div className="panel flex h-full flex-col gap-2.5 p-4 hover:border-ink-3">
+                    <Link to={`/p/${b.project.id}/l/${lot.id}`} className="group flex flex-1 flex-col gap-2.5">
+                      {head}
+                      <span className="mt-auto text-[0.875rem] font-medium text-plan">
+                        {closed ? 'Voir mon offre' : status === 'sent' ? 'Modifier mon offre' : status === 'draft' ? 'Continuer ma réponse' : 'Répondre'}
+                      </span>
+                    </Link>
+                    {!closed && status !== 'sent' && (
+                      <Button size="sm" variant="ghost" className="self-start" onClick={() => setDeclining(lot)}>
+                        Ne pas répondre
+                      </Button>
+                    )}
+                  </div>
+                ) : lot.access === 'declined' ? (
+                  <div className="panel flex h-full flex-col gap-2.5 p-4">
                     {head}
-                    <span className="mt-auto text-[0.875rem] font-medium text-plan">
-                      {closed ? 'Voir mon offre' : status === 'sent' ? 'Modifier mon offre' : status === 'draft' ? 'Continuer ma réponse' : 'Répondre'}
-                    </span>
-                  </Link>
+                    <div className="mt-auto flex flex-col gap-2.5">
+                      <p className="text-[0.875rem] text-ink-2">
+                        Vous ne répondez pas à ce lot.
+                        {b.access.find((a) => a.lot_id === lot.id && a.user_id === userId)?.comment && (
+                          <span className="mt-1 block text-ink-3">
+                            Motif transmis : « {b.access.find((a) => a.lot_id === lot.id && a.user_id === userId)?.comment} »
+                          </span>
+                        )}
+                      </p>
+                      {!closed && (
+                        <Button size="sm" className="self-start" onClick={() => undecline(lot.id)}>
+                          Revenir sur ma décision
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <div className="panel flex h-full flex-col gap-2.5 p-4">
                     {head}
@@ -674,6 +731,33 @@ function CompanyProject({ b, reload }: { b: ProjectBundle; reload: () => void })
         </ul>
       )}
       <p className="text-[0.8125rem] text-ink-3">Le DPGF d’un lot s’ouvre dès que l’acheteur a validé votre demande.</p>
+      <Dialog
+        open={!!declining}
+        onClose={() => setDeclining(null)}
+        title="Ne pas répondre à ce lot"
+        footer={
+          <>
+            <Button onClick={() => setDeclining(null)}>Annuler</Button>
+            <Button variant="primary" disabled={declineBusy || reason.trim().length < 3} onClick={submitDecline}>
+              Confirmer
+            </Button>
+          </>
+        }
+      >
+        <p className="text-[0.9062rem] text-ink-2">
+          Le motif est obligatoire et sera transmis à l’acheteur. Vous pourrez revenir sur cette décision tant que la remise n’est pas passée.
+        </p>
+        <label className="mt-3 flex flex-col gap-1.5 text-[0.875rem] font-medium">
+          Motif
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            placeholder="Ex. : charge de travail, lot hors de notre périmètre, délai trop court…"
+            className="w-full resize-none rounded-md border border-line bg-sheet px-3 py-2 text-[0.9375rem] font-normal focus:border-plan focus:outline-none"
+          />
+        </label>
+      </Dialog>
     </div>
   )
 }

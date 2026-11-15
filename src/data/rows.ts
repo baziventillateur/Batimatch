@@ -38,7 +38,7 @@ export interface ProjectRow {
 
 /** draft = invisible des entreprises ; published = ouvert ; suspended = visible mais gelé */
 export type LotStatus = 'draft' | 'published' | 'suspended'
-export type AccessStatus = 'pending' | 'approved' | 'refused'
+export type AccessStatus = 'pending' | 'approved' | 'refused' | 'declined'
 
 /** Demande d'accès d'une entreprise à un lot */
 export interface LotAccessRow {
@@ -47,6 +47,8 @@ export interface LotAccessRow {
   status: AccessStatus
   requested_at: string
   decided_at: string | null
+  /** Motif de « ne pas répondre », visible de l'acheteur */
+  comment?: string | null
 }
 
 /** Lot tel que le voit une entreprise avant d'y avoir accès : pas de DPGF */

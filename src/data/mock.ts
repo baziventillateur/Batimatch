@@ -274,7 +274,22 @@ export function createMockBackend(): Backend {
     async decideLotAccess(lotId, userId, status) {
       if (!isOwner(lotProject(lotId))) deny()
       const a = db.access.find((x) => x.lot_id === lotId && x.user_id === userId)
-      if (a) Object.assign(a, { status, decided_at: now() })
+      if (a) Object.assign(a, { status, decided_at: now(), comment: null })
+      save()
+      await delay(null)
+    },
+    async declineLot(lotId, comment) {
+      const a = db.access.find((x) => x.lot_id === lotId && x.user_id === me())
+      if (!a || (a.status !== 'approved' && a.status !== 'declined') || !lotOpen(lotId)) throw new Error('Action non autorisée sur ce lot.')
+      if (comment.trim().length < 3) throw new Error('Le motif doit comporter au moins 3 caractères.')
+      Object.assign(a, { status: 'declined', comment: comment.trim(), decided_at: now() })
+      save()
+      await delay(null)
+    },
+    async undeclineLot(lotId) {
+      const a = db.access.find((x) => x.lot_id === lotId && x.user_id === me())
+      if (!a || a.status !== 'declined' || !lotOpen(lotId)) throw new Error('Action non autorisée sur ce lot.')
+      Object.assign(a, { status: 'approved', comment: null, decided_at: now() })
       save()
       await delay(null)
     },

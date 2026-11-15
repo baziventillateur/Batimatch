@@ -143,12 +143,19 @@ end $$;
 create table if not exists public.lot_access (
   lot_id uuid not null references public.lots (id) on delete cascade,
   user_id uuid not null references auth.users (id) on delete cascade,
-  status text not null default 'pending' check (status in ('pending', 'approved', 'refused')),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'refused', 'declined')),
   requested_at timestamptz not null default now(),
   decided_at timestamptz,
+  -- Motif de « ne pas répondre » (obligatoire pour declined), visible de l'acheteur
+  comment text,
   primary key (lot_id, user_id)
 );
 create index if not exists lot_access_user_idx on public.lot_access (user_id);
+
+-- Mises à jour pour les bases déjà créées : statut « declined » et motif
+alter table public.lot_access add column if not exists comment text;
+alter table public.lot_access drop constraint if exists lot_access_status_check;
+alter table public.lot_access add constraint lot_access_status_check check (status in ('pending', 'approved', 'refused', 'declined'));
 
 -- Données réservées à l'acheteur : budget, réglages et critères, décision
 create table if not exists public.lot_private (
@@ -414,6 +421,16 @@ create policy lot_access_insert on public.lot_access for insert to authenticated
   );
 create policy lot_access_update on public.lot_access for update to authenticated
   using (public.is_lot_owner(lot_id)) with check (public.is_lot_owner(lot_id));
+-- L'entreprise peut ne pas répondre à un lot accessible (motif obligatoire), puis revenir sur sa décision
+create policy lot_access_decline on public.lot_access for update to authenticated
+  using (user_id = auth.uid() and status in ('approved', 'declined') and public.lot_open(lot_id))
+  with check (
+    user_id = auth.uid() and public.lot_open(lot_id)
+    and (
+      (status = 'declined' and char_length(trim(coalesce(comment, ''))) >= 3)
+      or (status = 'approved' and comment is null)
+    )
+  );
 create policy lot_access_delete on public.lot_access for delete to authenticated
   using (public.is_lot_owner(lot_id));
 

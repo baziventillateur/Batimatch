@@ -105,6 +105,14 @@ console.log('✓ lot : brouillon invisible, publié listé sans DPGF, accès sur
 assert.equal((await as(C1, `select budget_prices from public.lot_private`)).rows.length, 0, 'prix budgets invisibles')
 console.log('✓ entreprise : accès par code, lot visible, budget invisible')
 
+// Ne pas répondre : motif obligatoire, visible de l'acheteur, réversible par l'entreprise
+await fails(C1, `update public.lot_access set status = 'declined', comment = '  ' where lot_id = '${lid}' and user_id = '${C1}'`, 'ne pas répondre sans motif')
+assert.equal((await as(C1, `update public.lot_access set status = 'declined', comment = 'Charge de travail' where lot_id = $1 and user_id = $2 returning lot_id`, [lid, C1])).rows.length, 1)
+assert.equal((await as(B, `select comment from public.lot_access where lot_id = $1 and status = 'declined'`, [lid])).rows[0].comment, 'Charge de travail')
+assert.equal((await as(C2, `update public.lot_access set status = 'declined', comment = 'intrus' where lot_id = $1 and user_id = $2 returning lot_id`, [lid, C2])).rows.length, 0, 'décliner sans accès')
+assert.equal((await as(C1, `update public.lot_access set status = 'approved', comment = null where lot_id = $1 and user_id = $2 returning lot_id`, [lid, C1])).rows.length, 1, 'revenir sur sa décision')
+console.log('✓ ne pas répondre : motif obligatoire, visible de l’acheteur, réversible')
+
 // Offre de l'entreprise : brouillon invisible de l'acheteur, puis envoyée
 const o = await as(C1, `insert into public.offers (lot_id, company_id, company_name, prices) values ($1, $2, 'TP Val-de-Seine', '{"a": 12}') returning id`, [lid, C1])
 const oid = o.rows[0].id

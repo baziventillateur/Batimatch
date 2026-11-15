@@ -113,9 +113,13 @@ export function createSupabaseBackend(): Backend {
       const lotRows = check(lots) as LotRow[]
       const memberRows = check(members) as MemberRow[]
       const lotIds = lotRows.map((l) => l.id)
+      // Les accès de l'entreprise à un lot qu'elle a décliné ne sont pas dans « lots » : on les charge aussi par utilisateur
+      const { data: who } = await sb.auth.getUser()
+      const myId = who.user?.id ?? '00000000-0000-0000-0000-000000000000'
+      const accessFilter = lotIds.length ? `lot_id.in.(${lotIds.join(',')}),user_id.eq.${myId}` : `user_id.eq.${myId}`
       const [privates, access, catalog, offers, profiles] = await Promise.all([
         lotIds.length ? sb.from('lot_private').select('*').in('lot_id', lotIds) : Promise.resolve({ data: [], error: null }),
-        lotIds.length ? sb.from('lot_access').select('*').in('lot_id', lotIds) : Promise.resolve({ data: [], error: null }),
+        sb.from('lot_access').select('*').or(accessFilter),
         sb.rpc('project_lot_catalog', { p_project: id }),
         lotIds.length ? sb.from('offers').select(OFFER_LITE).in('lot_id', lotIds) : Promise.resolve({ data: [], error: null }),
         memberRows.length ? sb.from('profiles').select('*').in('id', memberRows.map((m) => m.user_id)) : Promise.resolve({ data: [], error: null }),
@@ -159,7 +163,15 @@ export function createSupabaseBackend(): Backend {
       check(await sb.from('lot_access').insert({ lot_id: lotId, user_id: data.user?.id }))
     },
     async decideLotAccess(lotId, userId, status) {
-      check(await sb.from('lot_access').update({ status, decided_at: new Date().toISOString() }).eq('lot_id', lotId).eq('user_id', userId))
+      check(await sb.from('lot_access').update({ status, decided_at: new Date().toISOString(), comment: null }).eq('lot_id', lotId).eq('user_id', userId))
+    },
+    async declineLot(lotId, comment) {
+      const { data } = await sb.auth.getUser()
+      check(await sb.from('lot_access').update({ status: 'declined', comment: comment.trim(), decided_at: new Date().toISOString() }).eq('lot_id', lotId).eq('user_id', data.user?.id ?? ''))
+    },
+    async undeclineLot(lotId) {
+      const { data } = await sb.auth.getUser()
+      check(await sb.from('lot_access').update({ status: 'approved', comment: null, decided_at: new Date().toISOString() }).eq('lot_id', lotId).eq('user_id', data.user?.id ?? ''))
     },
     async getLot(id) {
       const lot = check(await sb.from('lots').select('*').eq('id', id).single()) as LotRow

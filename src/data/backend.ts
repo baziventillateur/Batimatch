@@ -81,7 +81,11 @@ export interface Backend {
   /** Entreprise : demander l'accès à un lot publié */
   requestLotAccess(lotId: string): Promise<void>
   /** Acheteur : accepter ou refuser une entreprise sur un lot */
-  decideLotAccess(lotId: string, userId: string, status: Exclude<AccessStatus, 'pending'>): Promise<void>
+  decideLotAccess(lotId: string, userId: string, status: Exclude<AccessStatus, 'pending' | 'declined'>): Promise<void>
+  /** Entreprise : ne pas répondre à un lot accessible, avec un motif obligatoire */
+  declineLot(lotId: string, comment: string): Promise<void>
+  /** Entreprise : revenir sur un « ne pas répondre » */
+  undeclineLot(lotId: string): Promise<void>
   // Offres
   upsertOffer(row: OfferRow): Promise<void>
   deleteOffer(id: string): Promise<void>
