@@ -148,6 +148,7 @@ export function buildDemo(): DemoBundle {
     lot: 'Lot 01 – VRD',
     dueDate: d(-14),
     budget: 375000,
+    budgetPrices: Object.fromEntries(items.flatMap((it, i) => (ROWS[i][4] != null ? [[it.id, ROWS[i][4] as number]] : []))),
     description: 'Exemple de démonstration : entreprises et montants fictifs.',
     items,
     offers: [a1, b, c, a2],

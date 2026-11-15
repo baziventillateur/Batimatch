@@ -251,7 +251,7 @@ export default function DpgfTab() {
                       bare
                       aria-label="Prix unitaire budget"
                       data-cell={`${idx}-pu`}
-                      className="w-[4.75rem] shrink-0 text-right md:w-24"
+                      className="w-[4.75rem] shrink-0 text-right text-budget md:w-24"
                       placeholder="PU budget"
                       value={c.budgetPrices[it.id] ?? null}
                       onCommit={(v) => setBudgetPrice(it.id, v)}
@@ -326,7 +326,7 @@ export default function DpgfTab() {
           <p className="text-[0.875rem] text-ink-2">
             Budget estimé HT <span className="text-ink-3">(visible de vous seul, {budgetTotal.priced} ligne{budgetTotal.priced > 1 ? 's' : ''} chiffrée{budgetTotal.priced > 1 ? 's' : ''})</span>
           </p>
-          <span className="num text-[1.125rem] font-semibold text-ink">
+          <span className="num text-[1.125rem] font-semibold text-budget">
             <AnimatedNumber value={budgetTotal.total} format={fmtEur} duration={450} />
           </span>
         </div>

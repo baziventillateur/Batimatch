@@ -36,6 +36,11 @@
   --color-warn: #995c00;
   --color-warn-soft: #fdf1d8;
 
+  /* Code couleur des prix : entreprise (orange) et budget acheteur (bleu) */
+  --color-sst: #b4500c;
+  --color-budget: #1d62b8;
+  --color-budget-soft: #e4eefb;
+
   --color-s1: #2a78d6;
   --color-s2: #eb6834;
   --color-s3: #1baf7a;
@@ -66,6 +71,9 @@
     --color-bad-soft: #3a1b18;
     --color-warn: #e6ab42;
     --color-warn-soft: #36280d;
+    --color-sst: #f2a25c;
+    --color-budget: #7fb6f2;
+    --color-budget-soft: #14283f;
   }
 }
 

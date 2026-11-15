@@ -1,6 +1,6 @@
-import { memo, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, ClipboardPaste, CopyPlus, ImageUp, Lock, Mail, Phone, Plus, Search, Trash2, Undo2 } from 'lucide-react'
+import { ChevronLeft, ClipboardPaste, CopyPlus, Eye, EyeOff, ImageUp, Lock, Mail, Phone, Plus, Search, Trash2, Undo2 } from 'lucide-react'
 import { useC } from './ConsultationLayout'
 import { useStore } from '../store'
 import { useAuth } from '../data/auth'
@@ -81,7 +81,7 @@ function BuyerOffer({ offer }: { offer: Offer }) {
               <p className="whitespace-pre-line">{offer.message}</p>
             </blockquote>
           )}
-          <PriceGrid c={c} offer={offer} readOnly={readOnly} showMedians />
+          <PriceGrid c={c} offer={offer} readOnly={readOnly} showMedians budgetPrices={c.budgetPrices} />
           <ExtrasEditor c={c} offer={offer} readOnly={readOnly} buyer />
         </div>
 
@@ -336,7 +336,30 @@ const norm = (s: string) =>
     .replace(/[̀-ͯ]/g, '')
 
 /** Grille de saisie des prix unitaires d'une offre (clavier, collage Excel, contrôle à la médiane) */
-export function PriceGrid({ c, offer, readOnly, showMedians }: { c: Consultation; offer: Offer; readOnly: boolean; showMedians: boolean }) {
+export function PriceGrid({
+  c,
+  offer,
+  readOnly,
+  showMedians,
+  budgetPrices,
+}: {
+  c: Consultation
+  offer: Offer
+  readOnly: boolean
+  showMedians: boolean
+  /** Prix budget de l'acheteur. Fournis uniquement côté acheteur ; masqués tant qu'il ne les affiche pas. */
+  budgetPrices?: Record<string, number>
+}) {
+  const hasBudget = !!budgetPrices && Object.keys(budgetPrices).length > 0
+  const [showBudget, setShowBudget] = useState(false)
+  const [confirmBudget, setConfirmBudget] = useState(false)
+  // Sécurité : les budgets se remasquent dès que l'écran passe en arrière-plan
+  useEffect(() => {
+    if (!showBudget) return
+    const hide = () => document.hidden && setShowBudget(false)
+    document.addEventListener('visibilitychange', hide)
+    return () => document.removeEventListener('visibilitychange', hide)
+  }, [showBudget])
   const setPrice = useStore((s) => s.setPrice)
   const setPrices = useStore((s) => s.setPrices)
   const [filter, setFilter] = useState<'all' | 'todo'>('all')
@@ -425,7 +448,20 @@ export function PriceGrid({ c, offer, readOnly, showMedians }: { c: Consultation
             Coller une colonne de prix
           </Button>
         )}
+        {hasBudget && (
+          <Button
+            size="sm"
+            icon={showBudget ? <EyeOff size={15} /> : <Eye size={15} />}
+            aria-pressed={showBudget}
+            className={cx(showBudget && '!border-budget/50 !bg-budget-soft !text-budget')}
+            onClick={() => (showBudget ? setShowBudget(false) : setConfirmBudget(true))}
+          >
+            {showBudget ? 'Masquer les budgets' : 'Afficher les budgets'}
+          </Button>
+        )}
       </div>
+
+      {showBudget && budgetPrices && <BudgetBanner lines={lines.map((l) => l.item)} prices={offer.prices} budgetPrices={budgetPrices} />}
 
       {undo && (
         <div className="anim-pop flex items-center justify-between gap-3 rounded-md border border-good/30 bg-good-soft px-3 py-2 text-[0.875rem]" role="status">
@@ -478,6 +514,7 @@ export function PriceGrid({ c, offer, readOnly, showMedians }: { c: Consultation
                 value={offer.prices[r.item.id]}
                 med={medians.m[r.item.id] ?? null}
                 readOnly={readOnly}
+                budget={showBudget && budgetPrices ? (budgetPrices[r.item.id] ?? null) : undefined}
                 onCommit={(v) => setPrice(c.id, offer.id, r.item.id, v)}
                 onNav={(d) => focusIdx(r.idx + d)}
                 onPasteMany={(vals) => applyMany(r.idx, vals)}
@@ -492,6 +529,67 @@ export function PriceGrid({ c, offer, readOnly, showMedians }: { c: Consultation
         </p>
       )}
       <PastePricesDialog open={pasteOpen} onClose={() => setPasteOpen(false)} lines={visibleLines.map((r) => r.item)} prices={offer.prices} onApply={applyMany} />
+      <Dialog open={confirmBudget} onClose={() => setConfirmBudget(false)} title="Afficher les prix budget ?">
+        <div className="grid gap-4">
+          <p className="text-[0.9375rem] text-ink-2">
+            Vos prix budget vont apparaître à l’écran, en bleu, sous chaque ligne. Toute personne qui voit votre écran pourra les lire.
+          </p>
+          <p className="rounded-md border border-warn/30 bg-warn-soft px-3 py-2 text-[0.875rem]">
+            Vérifiez que l’entreprise n’est pas à côté de vous. Les budgets se remasquent quand vous quittez cette page.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setConfirmBudget(false)}>Annuler</Button>
+            <Button variant="primary" icon={<Eye size={16} />} onClick={() => (setShowBudget(true), setConfirmBudget(false))}>
+              Afficher les budgets
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </div>
+  )
+}
+
+/** Écart de l'offre par rapport au budget : au-dessus = défavorable, en dessous = favorable */
+function BudgetGap({ ratio }: { ratio: number }) {
+  const pct = Math.round(ratio * 100)
+  return (
+    <span className={cx('rounded-[3px] px-1 font-semibold', pct > 0 ? 'bg-bad-soft text-bad' : pct < 0 ? 'bg-good-soft text-good' : 'bg-line-2 text-ink-2')}>
+      {pct > 0 ? '+' : pct < 0 ? '−' : ''}
+      {Math.abs(pct)} % vs budget
+    </span>
+  )
+}
+
+/** Bandeau affiché quand les budgets sont visibles : légende des couleurs et écart global sur les lignes comparables */
+function BudgetBanner({ lines, prices, budgetPrices }: { lines: DpgfItem[]; prices: Offer['prices']; budgetPrices: Record<string, number> }) {
+  let budget = 0
+  let offer = 0
+  for (const it of lines) {
+    const b = budgetPrices[it.id]
+    const p = prices[it.id]
+    if (b == null || it.qty == null || p === undefined || it.scope !== 'base') continue
+    budget += b * it.qty
+    offer += p === 'inclus' ? 0 : p * it.qty
+  }
+  return (
+    <div className="anim-pop no-print flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-md border border-budget/35 bg-budget-soft px-3 py-2 text-[0.8125rem]" role="status">
+      <span className="flex flex-wrap items-center gap-x-3">
+        <span className="font-semibold text-budget">Budgets visibles</span>
+        <span className="flex items-center gap-1 text-ink-2">
+          <i className="size-2 rounded-full bg-sst" /> Prix entreprise
+        </span>
+        <span className="flex items-center gap-1 text-ink-2">
+          <i className="size-2 rounded-full bg-budget" /> Prix budget
+        </span>
+      </span>
+      {budget > 0 && (
+        <span className="num flex flex-wrap items-center gap-x-2">
+          <span className="text-sst">{fmtEur(offer)}</span>
+          <span className="text-ink-3">pour</span>
+          <span className="text-budget">{fmtEur(budget)}</span>
+          <BudgetGap ratio={(offer - budget) / budget} />
+        </span>
+      )}
     </div>
   )
 }
@@ -502,6 +600,7 @@ const PriceRow = memo(function PriceRow({
   value,
   med,
   readOnly,
+  budget,
   onCommit,
   onNav,
   onPasteMany,
@@ -511,6 +610,8 @@ const PriceRow = memo(function PriceRow({
   value: PriceValue | undefined
   med: number | null
   readOnly: boolean
+  /** undefined = budgets masqués ; null = ligne sans prix budget */
+  budget?: number | null
   onCommit: (v: PriceValue | null) => void
   onNav: (delta: number) => boolean
   onPasteMany: (values: (PriceValue | null)[]) => void
@@ -573,11 +674,24 @@ const PriceRow = memo(function PriceRow({
           {amount != null && amount > 0 && <span>= {fmtEur(amount)}</span>}
           <DeviationChip value={deviation} strong={strong} />
         </p>
+        {budget !== undefined && (
+          <p className="num anim-fade mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.75rem] text-budget">
+            {budget == null ? (
+              <span className="opacity-70">Pas de prix budget</span>
+            ) : (
+              <>
+                <span className="font-semibold">Budget {fmtNum(budget)} €</span>
+                {item.qty != null && <span>= {fmtEur(budget * item.qty)}</span>}
+                {typeof value === 'number' && budget > 0 && <BudgetGap ratio={(value - budget) / budget} />}
+              </>
+            )}
+          </p>
+        )}
       </div>
       <span className="hidden text-[0.875rem] text-ink-2 md:block">{item.unit}</span>
       <span className={cx('num hidden text-right text-[0.875rem] md:block', item.qty == null && 'text-warn')}>{item.qty == null ? 'à définir' : fmtNum(item.qty)}</span>
       {readOnly ? (
-        <span className={cx('num pr-3 text-right text-[0.9688rem] font-medium', value === 'inclus' && 'text-good italic', value === undefined && 'text-[0.8125rem] font-normal text-warn italic')}>
+        <span className={cx('num pr-3 text-right text-[0.9688rem] font-medium text-sst', value === 'inclus' && 'text-good italic', value === undefined && 'text-[0.8125rem] font-normal text-warn italic')}>
           {value === undefined ? 'non chiffré' : value === 'inclus' ? 'inclus' : fmtNum(value)}
         </span>
       ) : (
@@ -590,7 +704,7 @@ const PriceRow = memo(function PriceRow({
           data-pidx={idx}
           aria-label={`Prix unitaire, ${item.ref} ${item.label}`}
           title={med != null ? `Médiane des autres offres : ${fmtNum(med)} €` : undefined}
-          className={cx('field num h-10 py-1 text-right text-[1rem] md:h-9 md:text-[0.9375rem]', value === 'inclus' && 'text-good italic', strong && 'border-bad/50')}
+          className={cx('field num h-10 py-1 text-right text-[1rem] font-medium text-sst md:h-9 md:text-[0.9375rem]', value === 'inclus' && 'text-good italic', strong && 'border-bad/50')}
           placeholder="PU"
           value={display}
           onFocus={() => {
