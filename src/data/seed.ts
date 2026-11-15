@@ -19,7 +19,7 @@ export async function seedDemoProject(): Promise<{ projectId: string; lotId: str
     items: c.items,
     position: 0,
   })
-  await api.upsertLotPrivate({ lot_id: lot.id, budget: c.budget, settings: c.settings, awarded_offer_id: null })
+  await api.upsertLotPrivate({ lot_id: lot.id, budget: c.budget, budget_prices: c.budgetPrices, settings: c.settings, awarded_offer_id: null })
   for (const o of c.offers) await api.upsertOffer(fromOffer(o, lot.id))
   for (const r of reviews) await api.upsertReview({ offer_id: r.offerId, lot_id: lot.id, scores: r.scores, verdict: r.verdict })
   for (const cm of comments) await api.addComment({ lot_id: lot.id, offer_id: cm.offerId, body: cm.body })

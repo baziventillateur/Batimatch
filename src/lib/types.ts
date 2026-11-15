@@ -131,6 +131,8 @@ export interface Consultation {
   dueDate: string | null
   /** Budget objectif HT du lot (visible de l'acheteur seulement) */
   budget: number | null
+  /** Prix unitaires budget par ligne (id ligne → montant). Privé à l'acheteur. */
+  budgetPrices: Record<string, number>
   description: string
   items: DpgfItem[]
   offers: Offer[]

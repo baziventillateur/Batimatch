@@ -17,6 +17,7 @@ import { newItem, useStore } from '../store'
 import { linesOf } from '../lib/calc'
 import { UNITS, guessDpgfColumns, rowsToItems, splitClipboard, type ColumnRole } from '../lib/parse'
 import { exportBlankDpgf } from '../lib/io'
+import { fmtEur } from '../lib/format'
 import type { DpgfItem } from '../lib/types'
 import { Button, Dialog, EmptyState, Menu, MenuItem, NumberInput, Segmented, Toggle, cx } from '../components/ui'
 
@@ -60,6 +61,7 @@ export default function DpgfTab() {
   const removeItem = useStore((s) => s.removeItem)
   const moveItem = useStore((s) => s.moveItem)
   const setItems = useStore((s) => s.setItems)
+  const updateConsultation = useStore((s) => s.updateConsultation)
   const [pasting, setPasting] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -67,6 +69,26 @@ export default function DpgfTab() {
   const lineCount = useMemo(() => linesOf(c.items).length, [c.items])
   const pseCount = useMemo(() => c.items.filter((i) => i.kind === 'line' && i.scope === 'option').length, [c.items])
   const pricedIds = useMemo(() => new Set(c.offers.flatMap((o) => Object.keys(o.prices))), [c.offers])
+
+  /** Budget estimé : somme qty × prix unitaire budget, lignes chiffrées uniquement. Jamais envoyé aux entreprises. */
+  const budgetTotal = useMemo(() => {
+    let total = 0
+    let priced = 0
+    for (const { item } of linesOf(c.items)) {
+      const pu = c.budgetPrices[item.id]
+      if (pu == null || item.qty == null) continue
+      total += pu * item.qty
+      priced++
+    }
+    return { total, priced }
+  }, [c.items, c.budgetPrices])
+
+  const setBudgetPrice = (itemId: string, v: number | null) => {
+    const next = { ...c.budgetPrices }
+    if (v == null) delete next[itemId]
+    else next[itemId] = v
+    updateConsultation(c.id, { budgetPrices: next })
+  }
 
   useEffect(() => {
     if (!focusId) return
@@ -194,11 +216,11 @@ export default function DpgfTab() {
                 onKeyDown={(e) => onEnter(e, idx, 'label')}
               />
               {it.kind === 'line' && (
-                <div className="col-start-2 row-start-2 flex items-center gap-2 md:contents">
+                <div className="col-start-2 row-start-2 flex flex-wrap items-center gap-x-2 gap-y-2 md:contents">
                   <input
                     aria-label="Unité"
                     list="units"
-                    className="field-bare w-[4.5rem] md:w-full"
+                    className="field-bare w-14 min-w-0 md:w-full"
                     value={it.unit}
                     onChange={(e) => updateItem(c.id, it.id, { unit: e.target.value })}
                   />
@@ -206,22 +228,39 @@ export default function DpgfTab() {
                     bare
                     aria-label="Quantité"
                     data-cell={`${idx}-qty`}
-                    className={cx('w-[6.5rem] text-right md:w-full', it.qty == null && 'bg-warn-soft/60')}
+                    className={cx('w-20 shrink-0 text-right md:w-full', it.qty == null && 'bg-warn-soft/60')}
                     placeholder="Qté"
                     value={it.qty}
                     onCommit={(v) => updateItem(c.id, it.id, { qty: v })}
                     onKeyDown={(e) => onEnter(e, idx, 'qty')}
                   />
-                  <Segmented
-                    size="sm"
-                    label="Type de ligne"
-                    value={it.scope}
-                    onChange={(scope) => updateItem(c.id, it.id, { scope })}
-                    options={[
-                      { value: 'base', label: 'Base' },
-                      { value: 'option', label: 'PSE' },
-                    ]}
-                  />
+                  <div className="flex shrink-0 items-center gap-1.5 md:w-full" title="Visible de vous seul, jamais par les entreprises">
+                    <NumberInput
+                      bare
+                      aria-label="Prix unitaire budget"
+                      data-cell={`${idx}-pu`}
+                      className="w-20 text-right text-ink-3 md:w-full"
+                      placeholder="PU budget"
+                      value={c.budgetPrices[it.id] ?? null}
+                      onCommit={(v) => setBudgetPrice(it.id, v)}
+                      onKeyDown={(e) => onEnter(e, idx, 'pu')}
+                    />
+                    {c.budgetPrices[it.id] != null && it.qty != null && (
+                      <span className="num whitespace-nowrap text-[13px] text-ink-3">= {fmtEur(c.budgetPrices[it.id] * it.qty)}</span>
+                    )}
+                  </div>
+                  <div className="shrink-0">
+                    <Segmented
+                      size="sm"
+                      label="Type de ligne"
+                      value={it.scope}
+                      onChange={(scope) => updateItem(c.id, it.id, { scope })}
+                      options={[
+                        { value: 'base', label: 'Base' },
+                        { value: 'option', label: 'PSE' },
+                      ]}
+                    />
+                  </div>
                 </div>
               )}
               <div className="col-start-3 row-start-1 justify-self-end md:col-start-auto md:row-start-auto">
@@ -269,6 +308,15 @@ export default function DpgfTab() {
           <span className="ml-auto hidden self-center text-[12.5px] text-ink-3 sm:block">Entrée : ligne suivante</span>
         </div>
       </div>
+
+      {budgetTotal.priced > 0 && (
+        <div className="no-print flex flex-wrap items-baseline justify-between gap-2 rounded-md border border-line bg-paper/50 px-4 py-3">
+          <p className="text-[14px] text-ink-2">
+            Budget estimé HT <span className="text-ink-3">(visible de vous seul, {budgetTotal.priced} ligne{budgetTotal.priced > 1 ? 's' : ''} chiffrée{budgetTotal.priced > 1 ? 's' : ''})</span>
+          </p>
+          <span className="num text-[18px] font-semibold text-ink">{fmtEur(budgetTotal.total)}</span>
+        </div>
+      )}
 
       {lineCount > 0 && (
         <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-md border border-plan/25 bg-plan-soft/60 px-4 py-3">

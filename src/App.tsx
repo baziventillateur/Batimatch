@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { LogOut, UserRound } from 'lucide-react'
+import { LogOut, Shield, UserRound } from 'lucide-react'
 import { AuthProvider, useAuth } from './data/auth'
 import { api, errorMessage } from './data'
 import { Button, CompanyLogo, Dialog, Field, Loading, Menu, MenuItem } from './components/ui'
@@ -17,6 +17,8 @@ import CompareTab from './pages/CompareTab'
 import DecisionTab from './pages/DecisionTab'
 import SynthesePage from './pages/SynthesePage'
 import ResponsePage from './pages/ResponsePage'
+import AdminPage from './pages/AdminPage'
+import { isAdminEmail } from './lib/admin'
 
 function Logo() {
   return (
@@ -50,6 +52,11 @@ function UserMenu() {
             <MenuItem icon={<UserRound />} onClick={() => (close(), nav('/profil'))}>
               Mon profil et mon logo
             </MenuItem>
+            {isAdminEmail(profile.email) && (
+              <MenuItem icon={<Shield />} onClick={() => (close(), nav('/admin'))}>
+                Panneau admin
+              </MenuItem>
+            )}
             <MenuItem
               icon={<LogOut />}
               onClick={async () => {
@@ -135,6 +142,7 @@ function Shell() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/profil" element={<ProfilePage />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="/rejoindre/:code" element={<JoinPage />} />
           <Route path="/p/:pid" element={<ProjectPage />} />
           {isBuyer ? (

@@ -14,7 +14,7 @@ const offer = (id: string, company: string, prices: Offer['prices'], extra: Part
   contact: { firstName: '', lastName: '', email: '', phone: '' }, logoUrl: null, submittedAt: null, ...extra,
 })
 const consultation = (items: DpgfItem[], offers: Offer[], settings: Partial<Consultation['settings']> = {}): Consultation => ({
-  id: 'c', projectId: 'p', name: 'Test', affaire: '', lot: '', dueDate: null, budget: 1000, description: '',
+  id: 'c', projectId: 'p', name: 'Test', affaire: '', lot: '', dueDate: null, budget: 1000, budgetPrices: {}, description: '',
   items, offers, awardedOfferId: null, createdAt: '', updatedAt: '',
   settings: { latestOnly: true, fillMode: 'median', pseRetained: {}, extrasRetained: {}, criteria: DEFAULT_CRITERIA, ...settings },
 })

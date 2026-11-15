@@ -132,10 +132,14 @@ create index if not exists lots_project_idx on public.lots (project_id);
 create table if not exists public.lot_private (
   lot_id uuid primary key references public.lots (id) on delete cascade,
   budget numeric,
+  -- Prix unitaires budget par ligne du DPGF : { "<id ligne>": montant }. Jamais visibles des entreprises.
+  budget_prices jsonb not null default '{}'::jsonb,
   settings jsonb not null default '{}'::jsonb,
   awarded_offer_id uuid,
   updated_at timestamptz not null default now()
 );
+-- Pour une base déjà créée avant cette colonne
+alter table public.lot_private add column if not exists budget_prices jsonb not null default '{}'::jsonb;
 
 -- ─── Offres ─────────────────────────────────────────────────────────────────
 -- source = platform : déposée par l'entreprise elle-même ;

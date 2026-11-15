@@ -52,6 +52,7 @@ export interface LotRow {
 export interface LotPrivateRow {
   lot_id: string
   budget: number | null
+  budget_prices: Record<string, number> | null
   settings: Partial<CompareSettings>
   awarded_offer_id: string | null
 }
@@ -209,6 +210,7 @@ export function toConsultation(lot: LotRow, project: Pick<ProjectRow, 'name'> | 
     lot: lot.code ?? '',
     dueDate: lot.due_date,
     budget: num(priv?.budget),
+    budgetPrices: priv?.budget_prices ?? {},
     description: lot.description ?? '',
     items: lot.items ?? [],
     offers: offers.map(toOffer),

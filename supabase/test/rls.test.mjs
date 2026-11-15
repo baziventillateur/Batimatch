@@ -70,7 +70,7 @@ const { id: pid, access_code: code } = p.rows[0]
 assert.match(code, /^[A-HJ-NP-Z2-9]{6}$/)
 const lot = await as(B, `insert into public.lots (project_id, name, due_date, items) values ($1, 'Lot VRD', current_date + 7, '[{"id":"a","kind":"line"}]') returning id`, [pid])
 const lid = lot.rows[0].id
-await as(B, `insert into public.lot_private (lot_id, budget) values ($1, 375000)`, [lid])
+await as(B, `insert into public.lot_private (lot_id, budget, budget_prices) values ($1, 375000, '{"a": 12.5}')`, [lid])
 console.log('✓ acheteur : projet (code ' + code + '), lot et budget')
 
 // Entreprise : rien avant d'avoir rejoint
@@ -82,6 +82,7 @@ const joined = await as(C1, `select public.join_project($1) as pid`, [code.toLow
 assert.equal(joined.rows[0].pid, pid)
 assert.equal((await as(C1, `select * from public.lots`)).rows.length, 1)
 assert.equal((await as(C1, `select * from public.lot_private`)).rows.length, 0)
+assert.equal((await as(C1, `select budget_prices from public.lot_private`)).rows.length, 0, 'prix budgets invisibles')
 console.log('✓ entreprise : accès par code, lot visible, budget invisible')
 
 // Offre de l'entreprise : brouillon invisible de l'acheteur, puis envoyée

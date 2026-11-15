@@ -29,7 +29,7 @@ export async function loadLot(lotId: string) {
 }
 
 const lotFields = (c: Consultation) => ({ name: c.name, code: c.lot, description: c.description, due_date: c.dueDate, items: c.items })
-const privFields = (c: Consultation) => ({ budget: c.budget, settings: c.settings, awarded_offer_id: c.awardedOfferId })
+const privFields = (c: Consultation) => ({ budget: c.budget, budget_prices: c.budgetPrices, settings: c.settings, awarded_offer_id: c.awardedOfferId })
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 /**

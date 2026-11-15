@@ -348,7 +348,7 @@ function LotFormBody({ onClose, projectId, position, onCreated }: { onClose: () 
         setError(null)
         try {
           const lot = await api.createLot({ project_id: projectId, name: f.name.trim(), code: f.code.trim(), due_date: f.due || null, description: '', items: [], position })
-          await api.upsertLotPrivate({ lot_id: lot.id, budget: f.budget, settings: DEFAULT_SETTINGS, awarded_offer_id: null })
+          await api.upsertLotPrivate({ lot_id: lot.id, budget: f.budget, budget_prices: {}, settings: DEFAULT_SETTINGS, awarded_offer_id: null })
           onCreated(lot.id)
         } catch (err) {
           setError(errorMessage(err))

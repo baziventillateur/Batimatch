@@ -14,6 +14,7 @@ export const newConsultation = (partial: Partial<Consultation> = {}): Consultati
     lot: '',
     dueDate: null,
     budget: null,
+    budgetPrices: {},
     description: '',
     items: [],
     offers: [],
