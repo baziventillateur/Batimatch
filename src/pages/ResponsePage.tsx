@@ -64,7 +64,8 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
   const { profile } = useAuth()
   const totals = useOfferTotals(c, offer)
   const days = daysUntil(c.dueDate)
-  const closed = days != null && days < 0
+  const suspended = c.status === 'suspended'
+  const closed = suspended || (days != null && days < 0)
   const due = dueLabel(days)
   const [confirming, setConfirming] = useState(false)
   const [sending, setSending] = useState(false)
@@ -140,7 +141,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
 
       {closed ? (
         <p className="flex items-center gap-2 rounded-md border border-line bg-paper px-4 py-3 text-[0.9062rem]">
-          <Lock size={16} /> La date de rendu est passée : {sent ? 'votre offre a été transmise et ne peut plus être modifiée.' : 'il n’est plus possible de déposer une offre sur ce lot.'}
+          <Lock size={16} /> {suspended ? 'L’acheteur a suspendu cette consultation' : 'La date de rendu est passée'} : {sent ? 'votre offre a été transmise et ne peut plus être modifiée.' : suspended ? 'les réponses sont gelées pour le moment.' : 'il n’est plus possible de déposer une offre sur ce lot.'}
         </p>
       ) : justSent || sent ? (
         <div className={cx('flex items-start gap-3 rounded-md border border-good/30 bg-good-soft px-4 py-3', justSent && 'anim-pop')}>

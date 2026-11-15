@@ -80,8 +80,28 @@ await fails(C1, `insert into public.offers (lot_id, company_id) values ('${lid}'
 await fails(C1, `select public.join_project('ZZZZZZ')`, 'code inconnu')
 const joined = await as(C1, `select public.join_project($1) as pid`, [code.toLowerCase()])
 assert.equal(joined.rows[0].pid, pid)
+// Lot en brouillon : invisible, même dans la liste
+assert.equal((await as(C1, `select * from public.lots`)).rows.length, 0)
+assert.equal((await as(C1, `select * from public.project_lot_catalog($1)`, [pid])).rows.length, 0)
+await fails(C1, `insert into public.lot_access (lot_id, user_id) values ('${lid}', '${C1}')`, 'demande sur un lot non publié')
+// Publié : visible dans la liste (sans le DPGF), accès à demander
+await as(B, `update public.lots set status = 'published' where id = $1`, [lid])
+const cat = await as(C1, `select * from public.project_lot_catalog($1)`, [pid])
+assert.equal(cat.rows.length, 1)
+assert.equal(cat.rows[0].access, null)
+assert.equal(cat.rows[0].line_count, 1)
+assert.ok(!('items' in cat.rows[0]))
+assert.equal((await as(C1, `select * from public.lots`)).rows.length, 0)
+await fails(C1, `insert into public.offers (lot_id, company_id) values ('${lid}', '${C1}')`, 'offre sans accès au lot')
+await fails(C1, `insert into public.lot_access (lot_id, user_id, status) values ('${lid}', '${C1}', 'approved')`, 'accès auto-accordé')
+await as(C1, `insert into public.lot_access (lot_id, user_id) values ($1, $2)`, [lid, C1])
+assert.equal((await as(C1, `update public.lot_access set status = 'approved' where lot_id = $1 returning lot_id`, [lid])).rows.length, 0)
+assert.equal((await as(C1, `select * from public.lots`)).rows.length, 0)
+assert.equal((await as(B, `select * from public.lot_access`)).rows.length, 1)
+await as(B, `update public.lot_access set status = 'approved', decided_at = now() where lot_id = $1 and user_id = $2`, [lid, C1])
 assert.equal((await as(C1, `select * from public.lots`)).rows.length, 1)
 assert.equal((await as(C1, `select * from public.lot_private`)).rows.length, 0)
+console.log('✓ lot : brouillon invisible, publié listé sans DPGF, accès sur demande validée par l’acheteur')
 assert.equal((await as(C1, `select budget_prices from public.lot_private`)).rows.length, 0, 'prix budgets invisibles')
 console.log('✓ entreprise : accès par code, lot visible, budget invisible')
 
@@ -102,8 +122,10 @@ await as(B, `insert into public.offers (lot_id, source, status, company_name) va
 await fails(B, `insert into public.offers (lot_id, source, company_id) values ('${lid}', 'manual', '${C1}')`, 'offre manuelle au nom d’une entreprise inscrite')
 console.log('✓ acheteur : offres des entreprises en lecture seule, offres manuelles possibles')
 
-// Concurrence : C2 ne voit pas l'offre de C1 ni son profil
+// Concurrence : C2 ne voit pas l'offre de C1 ni son profil, ni la demande d'accès de C1
 await as(C2, `select public.join_project($1)`, [code])
+assert.equal((await as(C2, `select * from public.lot_access`)).rows.length, 0)
+assert.equal((await as(C2, `select * from public.lots`)).rows.length, 0)
 assert.equal((await as(C2, `select * from public.offers`)).rows.length, 0)
 assert.equal((await as(C2, `select * from public.profiles where id = '${C1}'`)).rows.length, 0)
 assert.equal((await as(C2, `select * from public.project_members`)).rows.length, 1)
@@ -127,6 +149,17 @@ await as(B, `update public.lots set due_date = current_date + 3 where id = $1`, 
 const reopened = await as(C1, `update public.offers set prices = '{"a": 9}' where id = $1 returning id`, [oid])
 assert.equal(reopened.rows.length, 1)
 console.log('✓ offre verrouillée après la date de rendu, rouverte si l’acheteur la repousse')
+
+// Lot suspendu : offre gelée ; accès refusé : le lot redevient invisible
+await as(B, `update public.lots set status = 'suspended' where id = $1`, [lid])
+assert.equal((await as(C1, `update public.offers set prices = '{"a": 8}' where id = $1 returning id`, [oid])).rows.length, 0)
+assert.equal((await as(C1, `select * from public.lots`)).rows.length, 1)
+await fails(C2, `insert into public.lot_access (lot_id, user_id) values ('${lid}', '${C2}')`, 'demande sur un lot suspendu')
+await as(B, `update public.lots set status = 'published' where id = $1`, [lid])
+await as(B, `update public.lot_access set status = 'refused' where lot_id = $1 and user_id = $2`, [lid, C1])
+assert.equal((await as(C1, `select * from public.lots`)).rows.length, 0)
+await as(B, `update public.lot_access set status = 'approved' where lot_id = $1 and user_id = $2`, [lid, C1])
+console.log('✓ lot suspendu gelé, accès révocable par l’acheteur')
 
 // Une entreprise ne peut pas modifier le lot ni créer de projet au nom d'un autre
 const lotUpd = await as(C1, `update public.lots set name = 'pirate' where id = $1 returning id`, [lid])

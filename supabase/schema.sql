@@ -128,6 +128,28 @@ create table if not exists public.lots (
 );
 create index if not exists lots_project_idx on public.lots (project_id);
 
+-- Publication du lot : draft = invisible des entreprises ; published = visible, demandes d'accès et réponses ouvertes ;
+-- suspended = visible mais gelé (plus de demande ni de modification d'offre).
+-- Les lots créés avant cette colonne restent publiés ; les nouveaux naissent en brouillon.
+alter table public.lots add column if not exists status text not null default 'published';
+alter table public.lots alter column status set default 'draft';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'lots_status_check') then
+    alter table public.lots add constraint lots_status_check check (status in ('draft', 'published', 'suspended'));
+  end if;
+end $$;
+
+-- Accès d'une entreprise à un lot : demandé par l'entreprise, validé par l'acheteur
+create table if not exists public.lot_access (
+  lot_id uuid not null references public.lots (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'refused')),
+  requested_at timestamptz not null default now(),
+  decided_at timestamptz,
+  primary key (lot_id, user_id)
+);
+create index if not exists lot_access_user_idx on public.lot_access (user_id);
+
 -- Données réservées à l'acheteur : budget, réglages et critères, décision
 create table if not exists public.lot_private (
   lot_id uuid primary key references public.lots (id) on delete cascade,
@@ -214,6 +236,12 @@ begin
 end;
 $$;
 
+-- Les entreprises qui avaient déjà une offre sur un lot gardent leur accès
+insert into public.lot_access (lot_id, user_id, status, decided_at)
+select distinct lot_id, company_id, 'approved', now() from public.offers
+where source = 'platform' and company_id is not null
+on conflict do nothing;
+
 -- ─── Fonctions d'aide aux règles d'accès (évitent les récursions RLS) ───────
 create or replace function public.is_project_owner(p_project uuid)
 returns boolean language sql stable security definer set search_path = public as $$
@@ -235,16 +263,39 @@ returns boolean language sql stable security definer set search_path = public as
   select public.is_project_owner(public.lot_project(p_lot));
 $$;
 
+-- Entreprise acceptée sur un lot visible (publié ou suspendu)
 create or replace function public.is_lot_member(p_lot uuid)
 returns boolean language sql stable security definer set search_path = public as $$
-  select public.is_project_member(public.lot_project(p_lot));
+  select exists (
+    select 1 from public.lot_access a
+    join public.lots l on l.id = a.lot_id
+    join public.project_members m on m.project_id = l.project_id and m.user_id = a.user_id
+    where a.lot_id = p_lot and a.user_id = auth.uid() and a.status = 'approved' and l.status <> 'draft');
 $$;
 
--- Le lot accepte encore des offres (date de rendu non dépassée, heure de Paris)
+create or replace function public.lot_published(p_lot uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.lots where id = p_lot and status = 'published');
+$$;
+
+-- Liste des lots visibles d'un projet pour une entreprise membre : titre et échéance seulement,
+-- jamais le DPGF tant que l'accès n'est pas accepté.
+create or replace function public.project_lot_catalog(p_project uuid)
+returns table (id uuid, name text, code text, due_date date, status text, line_count integer, access text)
+language sql stable security definer set search_path = public as $$
+  select l.id, l.name, l.code, l.due_date, l.status,
+         (select count(*)::int from jsonb_array_elements(l.items) e where e->>'kind' = 'line'),
+         (select a.status from public.lot_access a where a.lot_id = l.id and a.user_id = auth.uid())
+  from public.lots l
+  where l.project_id = p_project and l.status <> 'draft' and public.is_project_member(p_project)
+  order by l.position, l.created_at;
+$$;
+
+-- Le lot accepte encore des offres (publié, date de rendu non dépassée, heure de Paris)
 create or replace function public.lot_open(p_lot uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce(
-    (select due_date is null or due_date >= (now() at time zone 'Europe/Paris')::date
+    (select status = 'published' and (due_date is null or due_date >= (now() at time zone 'Europe/Paris')::date)
        from public.lots where id = p_lot),
     false);
 $$;
@@ -300,6 +351,7 @@ alter table public.projects enable row level security;
 alter table public.project_members enable row level security;
 alter table public.lots enable row level security;
 alter table public.lot_private enable row level security;
+alter table public.lot_access enable row level security;
 alter table public.offers enable row level security;
 alter table public.offer_reviews enable row level security;
 alter table public.offer_comments enable row level security;
@@ -311,7 +363,7 @@ begin
   for r in
     select policyname, tablename from pg_policies
     where schemaname = 'public'
-      and tablename in ('profiles', 'projects', 'project_members', 'lots', 'lot_private', 'offers', 'offer_reviews', 'offer_comments')
+      and tablename in ('profiles', 'projects', 'project_members', 'lots', 'lot_private', 'lot_access', 'offers', 'offer_reviews', 'offer_comments')
   loop
     execute format('drop policy if exists %I on public.%I', r.policyname, r.tablename);
   end loop;
@@ -342,15 +394,28 @@ create policy members_select on public.project_members for select to authenticat
 create policy members_delete on public.project_members for delete to authenticated
   using (user_id = auth.uid() or public.is_project_owner(project_id));
 
--- Lots : lisibles par l'acheteur et les entreprises du projet, modifiables par l'acheteur
+-- Lots : lisibles par l'acheteur et par les entreprises acceptées sur le lot, modifiables par l'acheteur
 create policy lots_select on public.lots for select to authenticated
-  using (public.is_project_owner(project_id) or public.is_project_member(project_id));
+  using (public.is_project_owner(project_id) or public.is_lot_member(id));
 create policy lots_insert on public.lots for insert to authenticated
   with check (public.is_project_owner(project_id));
 create policy lots_update on public.lots for update to authenticated
   using (public.is_project_owner(project_id)) with check (public.is_project_owner(project_id));
 create policy lots_delete on public.lots for delete to authenticated
   using (public.is_project_owner(project_id));
+
+-- Accès aux lots : l'entreprise dépose sa demande (toujours « en attente »), l'acheteur décide
+create policy lot_access_select on public.lot_access for select to authenticated
+  using (user_id = auth.uid() or public.is_lot_owner(lot_id));
+create policy lot_access_insert on public.lot_access for insert to authenticated
+  with check (
+    user_id = auth.uid() and status = 'pending' and decided_at is null
+    and public.is_project_member(public.lot_project(lot_id)) and public.lot_published(lot_id)
+  );
+create policy lot_access_update on public.lot_access for update to authenticated
+  using (public.is_lot_owner(lot_id)) with check (public.is_lot_owner(lot_id));
+create policy lot_access_delete on public.lot_access for delete to authenticated
+  using (public.is_lot_owner(lot_id));
 
 -- Données privées du lot : acheteur uniquement
 create policy lot_private_all on public.lot_private for all to authenticated
@@ -397,10 +462,12 @@ create policy comments_delete on public.offer_comments for delete to authenticat
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on
   public.profiles, public.projects, public.project_members, public.lots,
-  public.lot_private, public.offers, public.offer_reviews, public.offer_comments
+  public.lot_private, public.lot_access, public.offers, public.offer_reviews, public.offer_comments
   to authenticated;
 revoke all on function public.join_project(text) from public;
 grant execute on function public.join_project(text) to authenticated;
+revoke all on function public.project_lot_catalog(uuid) from public;
+grant execute on function public.project_lot_catalog(uuid) to authenticated;
 
 -- ─── Stockage des logos ─────────────────────────────────────────────────────
 -- Dossier public « logos » ; chacun ne peut écrire que dans son propre sous-dossier.

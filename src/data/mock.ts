@@ -1,7 +1,7 @@
 // Backend de démonstration en mémoire (stocké dans le navigateur), qui reproduit
 // les règles d'accès de la base Supabase. Sert au développement et aux tests visuels.
 import type { Backend, OfferLite } from './backend'
-import type { CommentRow, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import type { CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 import { uid } from '../lib/id'
 
 interface Db {
@@ -11,6 +11,7 @@ interface Db {
   members: MemberRow[]
   lots: LotRow[]
   privates: LotPrivateRow[]
+  access: LotAccessRow[]
   offers: OfferRow[]
   reviews: ReviewRow[]
   comments: CommentRow[]
@@ -18,7 +19,7 @@ interface Db {
 }
 
 const KEY = 'batimatch:mock'
-const empty = (): Db => ({ users: [], profiles: [], projects: [], members: [], lots: [], privates: [], offers: [], reviews: [], comments: [], session: null })
+const empty = (): Db => ({ users: [], profiles: [], projects: [], members: [], lots: [], privates: [], access: [], offers: [], reviews: [], comments: [], session: null })
 
 function load(): Db {
   try {
@@ -51,7 +52,12 @@ export function createMockBackend(): Backend {
   const lotProject = (lid: string) => db.lots.find((l) => l.id === lid)?.project_id ?? ''
   const lotOpen = (lid: string) => {
     const l = db.lots.find((x) => x.id === lid)
-    return !!l && (!l.due_date || l.due_date >= today())
+    return !!l && (l.status ?? 'published') === 'published' && (!l.due_date || l.due_date >= today())
+  }
+  /** Entreprise acceptée sur un lot visible */
+  const hasAccess = (lid: string) => {
+    const l = db.lots.find((x) => x.id === lid)
+    return !!l && (l.status ?? 'published') !== 'draft' && isMember(l.project_id) && db.access.some((a) => a.lot_id === lid && a.user_id === db.session && a.status === 'approved')
   }
   const canSeeOffer = (o: OfferRow) => o.company_id === db.session || (isOwner(lotProject(o.lot_id)) && (o.status === 'submitted' || o.source === 'manual'))
   const delay = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(v), 60))
@@ -151,7 +157,7 @@ export function createMockBackend(): Backend {
           const ids = new Set(lots.map((l) => l.id))
           return {
             project: clone(project),
-            lots: lots.map(({ id, name, code, due_date }) => ({ id, name, code, due_date })),
+            lots: lots.filter((l) => isOwner(project.id) || hasAccess(l.id)).map(({ id, name, code, due_date }) => ({ id, name, code, due_date })),
             offers: db.offers.filter((o) => ids.has(o.lot_id) && canSeeOffer(o)).map(({ id, lot_id, status, company_id }) => ({ id, lot_id, status, company_id })),
           }
         }),
@@ -184,8 +190,18 @@ export function createMockBackend(): Backend {
       const project = db.projects.find((p) => p.id === id)
       if (!project || !(isOwner(id) || isMember(id))) throw new Error('Projet introuvable.')
       const owner = isOwner(id)
-      const lots = db.lots.filter((l) => l.project_id === id).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
-      const ids = new Set(lots.map((l) => l.id))
+      const all = db.lots.filter((l) => l.project_id === id).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+      const lots = owner ? all : all.filter((l) => hasAccess(l.id))
+      const ids = new Set(all.map((l) => l.id))
+      const catalog: LotCatalogItem[] = owner
+        ? []
+        : all
+            .filter((l) => (l.status ?? 'published') !== 'draft')
+            .map((l) => ({
+              id: l.id, name: l.name, code: l.code, due_date: l.due_date, status: l.status ?? 'published',
+              line_count: (l.items ?? []).filter((i) => i.kind === 'line').length,
+              access: db.access.find((a) => a.lot_id === l.id && a.user_id === db.session)?.status ?? null,
+            }))
       const members = db.members.filter((m) => m.project_id === id && (owner || m.user_id === db.session))
       return delay(
         clone({
@@ -193,6 +209,8 @@ export function createMockBackend(): Backend {
           owner: db.profiles.find((p) => p.id === project.owner_id) ?? null,
           lots,
           privates: owner ? db.privates.filter((p) => ids.has(p.lot_id)) : [],
+          catalog,
+          access: db.access.filter((a) => ids.has(a.lot_id) && (owner || a.user_id === db.session)),
           offers: db.offers
             .filter((o) => ids.has(o.lot_id) && canSeeOffer(o))
             .map((o): OfferLite => ({
@@ -219,7 +237,7 @@ export function createMockBackend(): Backend {
 
     async createLot(input) {
       if (!isOwner(input.project_id)) deny()
-      const row: LotRow = { id: input.id ?? uid(), created_at: now(), updated_at: now(), ...input }
+      const row: LotRow = { id: input.id ?? uid(), created_at: now(), updated_at: now(), status: 'draft', ...input }
       db.lots.push(row)
       save()
       return delay(clone(row))
@@ -233,6 +251,7 @@ export function createMockBackend(): Backend {
       if (!isOwner(lotProject(id))) deny()
       db.lots = db.lots.filter((l) => l.id !== id)
       db.privates = db.privates.filter((p) => p.lot_id !== id)
+      db.access = db.access.filter((a) => a.lot_id !== id)
       db.offers = db.offers.filter((o) => o.lot_id !== id)
       db.reviews = db.reviews.filter((r) => r.lot_id !== id)
       db.comments = db.comments.filter((c) => c.lot_id !== id)
@@ -243,12 +262,28 @@ export function createMockBackend(): Backend {
       db.privates = [...db.privates.filter((p) => p.lot_id !== row.lot_id), clone(row)]
       save()
     },
+    async requestLotAccess(lotId) {
+      const uidMe = me()
+      const l = db.lots.find((x) => x.id === lotId)
+      if (!l || (l.status ?? 'published') !== 'published' || !isMember(l.project_id)) deny()
+      if (db.access.some((a) => a.lot_id === lotId && a.user_id === uidMe)) throw new Error('duplicate key value violates unique constraint "lot_access_pkey"')
+      db.access.push({ lot_id: lotId, user_id: uidMe, status: 'pending', requested_at: now(), decided_at: null })
+      save()
+      await delay(null)
+    },
+    async decideLotAccess(lotId, userId, status) {
+      if (!isOwner(lotProject(lotId))) deny()
+      const a = db.access.find((x) => x.lot_id === lotId && x.user_id === userId)
+      if (a) Object.assign(a, { status, decided_at: now() })
+      save()
+      await delay(null)
+    },
     async getLot(id) {
       const lot = db.lots.find((l) => l.id === id)
       if (!lot) throw new Error('Lot introuvable.')
       const pid = lot.project_id
       const owner = isOwner(pid)
-      if (!owner && !isMember(pid)) throw new Error('Lot introuvable.')
+      if (!owner && !hasAccess(id)) throw new Error('Lot introuvable.')
       return delay(
         clone({
           project: db.projects.find((p) => p.id === pid)!,
@@ -266,7 +301,7 @@ export function createMockBackend(): Backend {
       const existing = db.offers.find((o) => o.id === row.id)
       const pid = lotProject(row.lot_id)
       const ok =
-        (row.source === 'platform' && row.company_id === uidMe && isMember(pid) && lotOpen(row.lot_id)) ||
+        (row.source === 'platform' && row.company_id === uidMe && hasAccess(row.lot_id) && lotOpen(row.lot_id)) ||
         (row.source === 'manual' && row.company_id === null && isOwner(pid))
       if (!ok) deny()
       if (existing) {

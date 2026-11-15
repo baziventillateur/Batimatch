@@ -36,6 +36,30 @@ export interface ProjectRow {
   created_at: string
 }
 
+/** draft = invisible des entreprises ; published = ouvert ; suspended = visible mais gelé */
+export type LotStatus = 'draft' | 'published' | 'suspended'
+export type AccessStatus = 'pending' | 'approved' | 'refused'
+
+/** Demande d'accès d'une entreprise à un lot */
+export interface LotAccessRow {
+  lot_id: string
+  user_id: string
+  status: AccessStatus
+  requested_at: string
+  decided_at: string | null
+}
+
+/** Lot tel que le voit une entreprise avant d'y avoir accès : pas de DPGF */
+export interface LotCatalogItem {
+  id: string
+  name: string
+  code: string
+  due_date: string | null
+  status: LotStatus
+  line_count: number
+  access: AccessStatus | null
+}
+
 export interface LotRow {
   id: string
   project_id: string
@@ -43,6 +67,8 @@ export interface LotRow {
   code: string
   description: string
   due_date: string | null
+  /** Absent tant que la base n'a pas été mise à jour : traité comme publié */
+  status?: LotStatus
   items: DpgfItem[]
   position: number
   created_at: string
@@ -209,6 +235,7 @@ export function toConsultation(lot: LotRow, project: Pick<ProjectRow, 'name'> | 
     affaire: project?.name ?? '',
     lot: lot.code ?? '',
     dueDate: lot.due_date,
+    status: lot.status ?? 'published',
     budget: num(priv?.budget),
     budgetPrices: priv?.budget_prices ?? {},
     description: lot.description ?? '',

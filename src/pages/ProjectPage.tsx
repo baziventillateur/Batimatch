@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Check, ChevronLeft, Copy, Mail, MoreHorizontal, Pencil, Phone, Plus, Share2, Trash2, UserMinus } from 'lucide-react'
+import { Check, ChevronLeft, Clock, Copy, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, Send, Share2, Trash2, UserMinus, X } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import { useAuth } from '../data/auth'
 import type { ProjectBundle } from '../data/backend'
+import type { LotStatus } from '../data/rows'
 import { DEFAULT_SETTINGS, type Offer } from '../lib/types'
 import { declaredBase, linesOf } from '../lib/calc'
 import { daysUntil, fmtDate, fmtEur, fmtPctSigned, todayIso } from '../lib/format'
@@ -30,7 +31,7 @@ export default function ProjectPage() {
 
   if (error) return <ErrorBox message={error} onRetry={load} />
   if (!b || !profile) return <Loading />
-  return b.project.owner_id === profile.id ? <BuyerProject b={b} reload={load} /> : <CompanyProject b={b} />
+  return b.project.owner_id === profile.id ? <BuyerProject b={b} reload={load} /> : <CompanyProject b={b} reload={load} />
 }
 
 // ————————————————————————— Acheteur —————————————————————————
@@ -99,6 +100,8 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
 
       <InvitePanel code={b.project.access_code} projectName={b.project.name} />
 
+      <AccessRequests b={b} reload={reload} />
+
       <section className="flex flex-col gap-3" aria-labelledby="lots-title">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="lots-title" className="font-title text-[1.625rem] font-semibold">
@@ -110,12 +113,12 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
         </div>
         {b.lots.length === 0 ? (
           <EmptyState title="Aucun lot" action={<Button variant="primary" onClick={() => setAddingLot(true)}>Créer le premier lot</Button>}>
-            Créez un lot par corps d’état : sa DPGF, sa date de rendu et son budget objectif (que les entreprises ne voient pas).
+            Créez un lot par corps d’état : sa DPGF, sa date de rendu et son budget objectif (que les entreprises ne voient pas). Un lot reste invisible tant que vous ne le publiez pas.
           </EmptyState>
         ) : (
           <ul className="panel overflow-hidden">
             {b.lots.map((lot) => (
-              <LotRow key={lot.id} b={b} lotId={lot.id} />
+              <LotRow key={lot.id} b={b} lotId={lot.id} reload={reload} />
             ))}
           </ul>
         )}
@@ -143,8 +146,41 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
   )
 }
 
-function LotRow({ b, lotId }: { b: ProjectBundle; lotId: string }) {
+const LOT_STATUS: Record<LotStatus, { label: string; cls: string; icon: typeof Send }> = {
+  draft: { label: 'Non publié', cls: 'bg-line-2 text-ink-2', icon: EyeOff },
+  published: { label: 'Publié', cls: 'bg-good-soft text-good', icon: Send },
+  suspended: { label: 'Suspendu', cls: 'bg-warn-soft text-warn', icon: PauseCircle },
+}
+
+export function LotStatusPill({ status }: { status: LotStatus }) {
+  const s = LOT_STATUS[status]
+  const Icon = s.icon
+  return (
+    <span key={status} className={cx('anim-pop inline-flex shrink-0 items-center gap-1 rounded-[3px] px-1.5 py-0.5 text-[0.75rem] font-semibold', s.cls)}>
+      <Icon size={12} /> {s.label}
+    </span>
+  )
+}
+
+function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload: () => void }) {
   const lot = b.lots.find((l) => l.id === lotId)!
+  const status: LotStatus = lot.status ?? 'published'
+  const access = b.access.filter((a) => a.lot_id === lotId)
+  const pending = access.filter((a) => a.status === 'pending').length
+  const approved = access.filter((a) => a.status === 'approved').length
+  const [busy, setBusy] = useState(false)
+  const setStatus = async (next: LotStatus) => {
+    if (next === 'draft' && !confirm(`Dépublier « ${lot.name} » ? Les entreprises ne le verront plus, même celles déjà acceptées.`)) return
+    setBusy(true)
+    try {
+      await api.updateLot(lot.id, { status: next })
+      reload()
+    } catch (e) {
+      alert(errorMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
   const priv = b.privates.find((p) => p.lot_id === lotId)
   const offers = b.offers.filter((o) => o.lot_id === lotId && (o.status === 'submitted' || o.source === 'manual'))
   const days = daysUntil(lot.due_date)
@@ -167,7 +203,7 @@ function LotRow({ b, lotId }: { b: ProjectBundle; lotId: string }) {
         <span className="min-w-0">
           <span className="block truncate text-[1.0625rem] font-semibold">{lot.name || 'Lot sans nom'}</span>
           <span className="block truncate text-[0.8438rem] text-ink-3">
-            {[lot.code, `${lineItemsCount(lot.items)} lignes`].filter(Boolean).join(', ')}
+            {[lot.code, `${lineItemsCount(lot.items)} ligne${lineItemsCount(lot.items) > 1 ? 's' : ''}`].filter(Boolean).join(', ')}
           </span>
         </span>
         <span className="text-right text-[0.875rem] md:text-left">
@@ -195,14 +231,143 @@ function LotRow({ b, lotId }: { b: ProjectBundle; lotId: string }) {
           )}
         </span>
       </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-2.5 sm:px-5">
+        <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.8125rem] text-ink-2">
+          <LotStatusPill status={status} />
+          {status !== 'draft' && (
+            <span>
+              <span className="num font-semibold text-ink">{approved}</span> entreprise{approved > 1 ? 's' : ''} acceptée{approved > 1 ? 's' : ''}
+            </span>
+          )}
+          {pending > 0 && (
+            <span className="font-medium text-warn">
+              {pending} demande{pending > 1 ? 's' : ''} en attente
+            </span>
+          )}
+        </span>
+        <span className="flex items-center gap-1.5">
+          {status === 'draft' && (
+            <Button size="sm" variant="primary" icon={<Send size={14} />} disabled={busy} onClick={() => setStatus('published')}>
+              Publier
+            </Button>
+          )}
+          {status === 'published' && (
+            <Button size="sm" icon={<PauseCircle size={14} />} disabled={busy} onClick={() => setStatus('suspended')}>
+              Suspendre
+            </Button>
+          )}
+          {status === 'suspended' && (
+            <Button size="sm" variant="primary" icon={<Send size={14} />} disabled={busy} onClick={() => setStatus('published')}>
+              Reprendre
+            </Button>
+          )}
+          {status !== 'draft' && (
+            <Menu label={`Publication de ${lot.name}`} icon={<MoreHorizontal size={17} />}>
+              {(close) => (
+                <MenuItem icon={<EyeOff />} onClick={() => (close(), setStatus('draft'))}>
+                  Dépublier (remettre en brouillon)
+                </MenuItem>
+              )}
+            </Menu>
+          )}
+        </span>
+      </div>
     </li>
+  )
+}
+
+/** Demandes d'accès aux lots : l'acheteur accepte ou refuse chaque entreprise, lot par lot */
+function AccessRequests({ b, reload }: { b: ProjectBundle; reload: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const order = { pending: 0, approved: 1, refused: 2 }
+  const rows = [...b.access].sort((x, y) => order[x.status] - order[y.status] || y.requested_at.localeCompare(x.requested_at))
+  if (!rows.length) return null
+  const pending = rows.filter((r) => r.status === 'pending').length
+  const decide = async (lotId: string, userId: string, status: 'approved' | 'refused') => {
+    setBusy(`${lotId}:${userId}`)
+    try {
+      await api.decideLotAccess(lotId, userId, status)
+      reload()
+    } catch (e) {
+      alert(errorMessage(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="access-title">
+      <h2 id="access-title" className="flex items-center gap-2.5 font-title text-[1.625rem] font-semibold">
+        Demandes d’accès
+        {pending > 0 && <span className="num anim-pop rounded-full bg-warn px-2 py-0.5 font-sans text-[0.8125rem] font-semibold text-sheet">{pending}</span>}
+      </h2>
+      <ul className="panel overflow-hidden">
+        {rows.map((r) => {
+          const p = b.members.find((m) => m.user_id === r.user_id)?.profile
+          const lot = b.lots.find((l) => l.id === r.lot_id)
+          const name = p?.company_name || 'Entreprise'
+          const key = `${r.lot_id}:${r.user_id}`
+          return (
+            <li key={key} className={cx('flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-2 px-4 py-2.5 last:border-0 sm:px-5', r.status === 'pending' && 'bg-warn-soft/40')}>
+              <CompanyLogo name={name} url={p?.logo_url} size={36} />
+              <div className="min-w-[9rem] flex-1">
+                <p className="font-semibold leading-snug">{name}</p>
+                <p className="text-[0.8438rem] leading-snug">
+                  <span className="text-ink-3">demande l’accès à</span> <span className="font-medium">{lot?.name || 'un lot'}</span>
+                </p>
+                <p className="flex flex-wrap gap-x-3 text-[0.8125rem] text-ink-2">
+                  <span>{[p?.first_name, p?.last_name].filter(Boolean).join(' ')}</span>
+                  {p?.email && (
+                    <a href={`mailto:${p.email}`} className="text-plan hover:underline">
+                      {p.email}
+                    </a>
+                  )}
+                  {p?.phone && (
+                    <a href={`tel:${p.phone.replace(/\s/g, '')}`} className="text-plan hover:underline">
+                      {p.phone}
+                    </a>
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {r.status === 'pending' ? (
+                  <>
+                    <Button size="sm" icon={<X size={14} />} disabled={busy === key} onClick={() => decide(r.lot_id, r.user_id, 'refused')}>
+                      Refuser
+                    </Button>
+                    <Button size="sm" variant="primary" icon={<Check size={14} />} disabled={busy === key} onClick={() => decide(r.lot_id, r.user_id, 'approved')}>
+                      Accepter
+                    </Button>
+                  </>
+                ) : r.status === 'approved' ? (
+                  <>
+                    <span className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-good">
+                      <Check size={14} /> Acceptée
+                    </span>
+                    <Button size="sm" variant="ghost" disabled={busy === key} onClick={() => confirm(`Retirer l’accès de ${name} à ce lot ?`) && decide(r.lot_id, r.user_id, 'refused')}>
+                      Retirer
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[0.8125rem] text-ink-3">Refusée</span>
+                    <Button size="sm" variant="ghost" disabled={busy === key} onClick={() => decide(r.lot_id, r.user_id, 'approved')}>
+                      Accepter
+                    </Button>
+                  </>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }
 
 function InvitePanel({ code, projectName }: { code: string; projectName: string }) {
   const [copied, setCopied] = useState<string | null>(null)
   const link = `${window.location.origin}${window.location.pathname}#/rejoindre/${code}`
-  const message = `Bonjour,\n\nNous vous invitons à remettre une offre pour le projet « ${projectName} » sur Batimatch.\n\n1. Créez votre compte entreprise : ${link}\n2. Le projet s’ouvre automatiquement (code d’accès : ${code}).\n\nVous pourrez y consulter les DPGF, saisir vos prix et modifier votre offre jusqu’à la date de rendu.\n\nCordialement,`
+  const message = `Bonjour,\n\nNous vous invitons à remettre une offre pour le projet « ${projectName} » sur Batimatch.\n\n1. Créez votre compte entreprise : ${link}\n2. Le projet s’ouvre automatiquement (code d’accès : ${code}).\n3. Demandez l’accès aux lots qui vous concernent : nous validons votre demande.\n\nVous pourrez ensuite consulter les DPGF, saisir vos prix et modifier votre offre jusqu’à la date de rendu.\n\nCordialement,`
   const copy = async (text: string, what: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -217,7 +382,7 @@ function InvitePanel({ code, projectName }: { code: string; projectName: string 
       <div className="flex flex-col gap-1">
         <h2 className="font-semibold">Inviter les entreprises</h2>
         <p className="max-w-[52ch] text-[0.875rem] text-ink-2">
-          Transmettez ce code ou le lien d’invitation : l’entreprise crée son compte et accède aux lots de ce projet. Elle ne verra ni votre budget ni les autres offres.
+          Transmettez ce code ou le lien d’invitation : l’entreprise crée son compte, voit la liste des lots publiés et demande l’accès à ceux qui la concernent. Vous validez chaque demande. Elle ne verra ni votre budget ni les autres offres.
         </p>
       </div>
       <div className="flex flex-col items-start gap-2.5 sm:items-end">
@@ -385,8 +550,9 @@ function LotFormBody({ onClose, projectId, position, onCreated }: { onClose: () 
 
 // ————————————————————————— Entreprise —————————————————————————
 
-function CompanyProject({ b }: { b: ProjectBundle }) {
+function CompanyProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
   const { userId } = useAuth()
+  const [asking, setAsking] = useState<string | null>(null)
   const owner = b.owner
   const ownerName = owner?.company_name || [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') || 'L’acheteur'
   return (
@@ -427,40 +593,87 @@ function CompanyProject({ b }: { b: ProjectBundle }) {
         )}
       </section>
 
-      <h2 className="font-title text-[1.625rem] font-semibold">Lots à chiffrer</h2>
-      {b.lots.length === 0 ? (
-        <EmptyState title="Pas encore de lot publié">L’acheteur n’a pas encore mis de DPGF en ligne sur ce projet. Revenez un peu plus tard.</EmptyState>
+      <h2 className="font-title text-[1.625rem] font-semibold">Lots de la consultation</h2>
+      {b.catalog.length === 0 ? (
+        <EmptyState title="Pas encore de lot publié">L’acheteur n’a pas encore publié de lot sur ce projet. Revenez un peu plus tard.</EmptyState>
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">
-          {b.lots.map((lot) => {
+          {b.catalog.map((lot) => {
+            const open = lot.access === 'approved' && b.lots.some((l) => l.id === lot.id)
             const mine = b.offers.find((o) => o.lot_id === lot.id && o.company_id === userId)
             const days = daysUntil(lot.due_date)
-            const closed = days != null && days < 0
+            const suspended = lot.status === 'suspended'
+            const closed = suspended || (days != null && days < 0)
             const due = dueLabel(days)
             const status = mine?.status === 'submitted' ? 'sent' : mine ? 'draft' : 'none'
+            const head = (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-[1.125rem] font-semibold">{lot.name}</h3>
+                    <p className="text-[0.8438rem] text-ink-3">{[lot.code, `${lot.line_count} ligne${lot.line_count > 1 ? 's' : ''}`].filter(Boolean).join(', ')}</p>
+                  </div>
+                  {suspended ? <LotStatusPill status="suspended" /> : open ? <StatusPill status={status} /> : null}
+                </div>
+                <p className="text-[0.875rem]">
+                  Remise le <span className="num font-medium">{fmtDate(lot.due_date)}</span>{' '}
+                  <span className={cx(due.tone === 'warn' ? 'font-medium text-warn' : 'text-ink-3')}>({due.text})</span>
+                </p>
+              </>
+            )
             return (
               <li key={lot.id}>
-                <Link to={`/p/${b.project.id}/l/${lot.id}`} className="panel group flex h-full flex-col gap-3 p-5 hover:border-ink-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="text-[1.125rem] font-semibold">{lot.name}</h3>
-                      <p className="text-[0.8438rem] text-ink-3">{[lot.code, `${lineItemsCount(lot.items)} lignes`].filter(Boolean).join(', ')}</p>
+                {open ? (
+                  <Link to={`/p/${b.project.id}/l/${lot.id}`} className="panel group flex h-full flex-col gap-2.5 p-4 hover:border-ink-3">
+                    {head}
+                    <span className="mt-auto text-[0.875rem] font-medium text-plan">
+                      {closed ? 'Voir mon offre' : status === 'sent' ? 'Modifier mon offre' : status === 'draft' ? 'Continuer ma réponse' : 'Répondre'}
+                    </span>
+                  </Link>
+                ) : (
+                  <div className="panel flex h-full flex-col gap-2.5 p-4">
+                    {head}
+                    <div className="mt-auto">
+                      {lot.access === 'pending' ? (
+                        <p key="pending" className="anim-pop inline-flex items-center gap-1.5 rounded-[4px] bg-warn-soft px-2 py-1 text-[0.8438rem] font-medium text-warn">
+                          <Clock size={14} /> Demande envoyée, en attente de validation
+                        </p>
+                      ) : lot.access === 'refused' ? (
+                        <p className="inline-flex items-center gap-1.5 text-[0.8438rem] text-ink-3">
+                          <Lock size={14} /> Accès non accordé par l’acheteur
+                        </p>
+                      ) : suspended ? (
+                        <p className="text-[0.8438rem] text-ink-3">Consultation suspendue : les demandes d’accès sont fermées.</p>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          icon={<Send size={14} />}
+                          disabled={asking === lot.id}
+                          onClick={async () => {
+                            setAsking(lot.id)
+                            try {
+                              await api.requestLotAccess(lot.id)
+                              reload()
+                            } catch (e) {
+                              alert(errorMessage(e))
+                            } finally {
+                              setAsking(null)
+                            }
+                          }}
+                        >
+                          Demander l’accès
+                        </Button>
+                      )}
                     </div>
-                    <StatusPill status={status} />
                   </div>
-                  <p className="text-[0.875rem]">
-                    Remise le <span className="num font-medium">{fmtDate(lot.due_date)}</span>{' '}
-                    <span className={cx(due.tone === 'warn' ? 'font-medium text-warn' : 'text-ink-3')}>({due.text})</span>
-                  </p>
-                  <span className="mt-auto text-[0.875rem] font-medium text-plan">
-                    {closed ? 'Voir mon offre' : status === 'sent' ? 'Modifier mon offre' : status === 'draft' ? 'Continuer ma réponse' : 'Répondre'}
-                  </span>
-                </Link>
+                )}
               </li>
             )
           })}
         </ul>
       )}
+      <p className="text-[0.8125rem] text-ink-3">Le DPGF d’un lot s’ouvre dès que l’acheteur a validé votre demande.</p>
     </div>
   )
 }

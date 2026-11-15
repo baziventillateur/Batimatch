@@ -13,6 +13,7 @@ export const newConsultation = (partial: Partial<Consultation> = {}): Consultati
     affaire: '',
     lot: '',
     dueDate: null,
+    status: 'draft',
     budget: null,
     budgetPrices: {},
     description: '',

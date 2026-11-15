@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { AlertTriangle, Check, ChevronLeft, FileSpreadsheet, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, EyeOff, FileSpreadsheet, MoreHorizontal, PauseCircle, Pencil, Send, Trash2 } from 'lucide-react'
 import { useConsultation, useStore } from '../store'
 import { api, errorMessage } from '../data'
 import { useAuth } from '../data/auth'
@@ -174,6 +174,32 @@ export default function ConsultationLayout() {
           </div>
         </dl>
       </section>
+
+      {c.status !== 'published' && (
+        <div className="no-print anim-fade flex flex-wrap items-center justify-between gap-2 rounded-md border border-warn/30 bg-warn-soft px-3 py-2 text-[0.875rem]">
+          <span className="flex items-center gap-2">
+            {c.status === 'draft' ? <EyeOff size={16} className="shrink-0 text-warn" /> : <PauseCircle size={16} className="shrink-0 text-warn" />}
+            {c.status === 'draft'
+              ? 'Lot non publié : les entreprises ne le voient pas encore.'
+              : 'Lot suspendu : les entreprises le voient, mais ne peuvent plus modifier leur offre.'}
+          </span>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<Send size={14} />}
+            onClick={async () => {
+              try {
+                await api.updateLot(c.id, { status: 'published' })
+                update(c.id, { status: 'published' })
+              } catch (e) {
+                alert(errorMessage(e))
+              }
+            }}
+          >
+            {c.status === 'draft' ? 'Publier le lot' : 'Reprendre la consultation'}
+          </Button>
+        </div>
+      )}
 
       <nav aria-label="Étapes" className="no-print -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
         <ol className="flex min-w-max gap-1 border-b border-line">

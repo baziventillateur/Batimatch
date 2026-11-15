@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Backend, OfferLite, ProjectBundle, ProjectListItem } from './backend'
-import type { CommentRow, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import type { CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 
 // Adresse et clé publique du projet Supabase. La clé « publishable » est faite pour être
 // embarquée dans l'application : la sécurité repose sur les règles RLS de la base.
@@ -113,8 +113,10 @@ export function createSupabaseBackend(): Backend {
       const lotRows = check(lots) as LotRow[]
       const memberRows = check(members) as MemberRow[]
       const lotIds = lotRows.map((l) => l.id)
-      const [privates, offers, profiles] = await Promise.all([
+      const [privates, access, catalog, offers, profiles] = await Promise.all([
         lotIds.length ? sb.from('lot_private').select('*').in('lot_id', lotIds) : Promise.resolve({ data: [], error: null }),
+        lotIds.length ? sb.from('lot_access').select('*').in('lot_id', lotIds) : Promise.resolve({ data: [], error: null }),
+        sb.rpc('project_lot_catalog', { p_project: id }),
         lotIds.length ? sb.from('offers').select(OFFER_LITE).in('lot_id', lotIds) : Promise.resolve({ data: [], error: null }),
         memberRows.length ? sb.from('profiles').select('*').in('id', memberRows.map((m) => m.user_id)) : Promise.resolve({ data: [], error: null }),
       ])
@@ -124,6 +126,11 @@ export function createSupabaseBackend(): Backend {
         owner: (owner.data as ProfileRow | null) ?? null,
         lots: lotRows,
         privates: (check(privates) ?? []) as LotPrivateRow[],
+        // Base pas encore mise à jour : on retombe sur l'ancien fonctionnement (tous les lots ouverts)
+        catalog: catalog.error
+          ? lotRows.map((l) => ({ id: l.id, name: l.name, code: l.code, due_date: l.due_date, status: 'published' as const, line_count: (l.items ?? []).filter((i) => i.kind === 'line').length, access: 'approved' as const }))
+          : ((catalog.data ?? []) as LotCatalogItem[]),
+        access: access.error ? [] : ((access.data ?? []) as LotAccessRow[]),
         offers: (check(offers) ?? []) as OfferLite[],
         members: memberRows.map((m) => ({ ...m, profile: profRows.find((p) => p.id === m.user_id) ?? null })),
       }
@@ -146,6 +153,13 @@ export function createSupabaseBackend(): Backend {
     },
     async upsertLotPrivate(row) {
       check(await sb.from('lot_private').upsert(row, { onConflict: 'lot_id' }))
+    },
+    async requestLotAccess(lotId) {
+      const { data } = await sb.auth.getUser()
+      check(await sb.from('lot_access').insert({ lot_id: lotId, user_id: data.user?.id }))
+    },
+    async decideLotAccess(lotId, userId, status) {
+      check(await sb.from('lot_access').update({ status, decided_at: new Date().toISOString() }).eq('lot_id', lotId).eq('user_id', userId))
     },
     async getLot(id) {
       const lot = check(await sb.from('lots').select('*').eq('id', id).single()) as LotRow

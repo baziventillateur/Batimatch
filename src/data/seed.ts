@@ -18,6 +18,7 @@ export async function seedDemoProject(): Promise<{ projectId: string; lotId: str
     description: c.description,
     items: c.items,
     position: 0,
+    status: 'published',
   })
   await api.upsertLotPrivate({ lot_id: lot.id, budget: c.budget, budget_prices: c.budgetPrices, settings: c.settings, awarded_offer_id: null })
   for (const o of c.offers) await api.upsertOffer(fromOffer(o, lot.id))

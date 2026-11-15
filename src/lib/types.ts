@@ -132,6 +132,8 @@ export interface Consultation {
   /** Date limite de remise des offres (AAAA-MM-JJ) */
   dueDate: string | null
   /** Budget objectif HT du lot (visible de l'acheteur seulement) */
+  /** Publication du lot auprès des entreprises */
+  status: 'draft' | 'published' | 'suspended'
   budget: number | null
   /** Prix unitaires budget par ligne (id ligne → montant). Privé à l'acheteur. */
   budgetPrices: Record<string, number>
