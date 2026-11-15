@@ -52,7 +52,7 @@ function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; 
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-title text-[34px] leading-none font-bold sm:text-[40px]">Mes projets</h1>
+          <h1 className="font-title text-[2.125rem] leading-none font-bold sm:text-[2.5rem]">Mes projets</h1>
           <p className="mt-2 text-ink-2">Un projet par affaire ; dans chaque projet, un lot par demande d’offre.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -72,7 +72,7 @@ function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; 
       {items && items.length === 0 && (
         <div className="grid gap-5 lg:grid-cols-[1.1fr_1fr]">
           <div className="panel flex flex-col gap-6 p-6 sm:p-8">
-            <h2 className="font-title text-[28px] leading-tight font-semibold">Lancer une consultation en trois temps</h2>
+            <h2 className="font-title text-[1.75rem] leading-tight font-semibold">Lancer une consultation en trois temps</h2>
             <ol className="grid gap-4">
               {[
                 ['Créez le projet et ses lots', 'Pour chaque lot : la DPGF (collée depuis Excel) et la date de rendu.'],
@@ -80,7 +80,7 @@ function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; 
                 ['Comparez et décidez', 'Podium, critères notés, commentaires internes et synthèse à présenter.'],
               ].map(([t, d], i) => (
                 <li key={t} className="grid grid-cols-[2.25rem_1fr] gap-3">
-                  <span className="num flex size-9 items-center justify-center rounded-full border border-ink/70 text-[17px] font-semibold">{i + 1}</span>
+                  <span className="num flex size-9 items-center justify-center rounded-full border border-ink/70 text-[1.0625rem] font-semibold">{i + 1}</span>
                   <div>
                     <p className="font-semibold">{t}</p>
                     <p className="text-ink-2">{d}</p>
@@ -98,12 +98,12 @@ function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; 
             </div>
           </div>
           <div className="panel hidden flex-col justify-center gap-3 p-8 text-ink-2 sm:flex">
-            <p className="text-[14px] text-ink-3">Ce que voient les entreprises</p>
+            <p className="text-[0.875rem] text-ink-3">Ce que voient les entreprises</p>
             <div className="rounded-md border border-line p-4">
-              <p className="text-[13px] text-ink-3">Code du projet</p>
-              <p className="num text-[34px] font-semibold tracking-[0.2em] text-ink">K7M4QX</p>
+              <p className="text-[0.8125rem] text-ink-3">Code du projet</p>
+              <p className="num text-[2.125rem] font-semibold tracking-[0.2em] text-ink">K7M4QX</p>
             </div>
-            <p className="text-[14px]">Elles ne voient ni votre budget, ni les offres concurrentes, ni vos notes.</p>
+            <p className="text-[0.875rem]">Elles ne voient ni votre budget, ni les offres concurrentes, ni vos notes.</p>
           </div>
         </div>
       )}
@@ -138,26 +138,26 @@ function ProjectCard({ it }: { it: ProjectListItem }) {
       <Link to={`/p/${it.project.id}`} className="panel group flex h-full flex-col gap-4 p-5 transition-colors hover:border-ink-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate text-[19px] font-semibold">{it.project.name}</h3>
-            <p className="truncate text-[13.5px] text-ink-3">{it.project.reference || 'Sans référence'}</p>
+            <h3 className="truncate text-[1.1875rem] font-semibold">{it.project.name}</h3>
+            <p className="truncate text-[0.8438rem] text-ink-3">{it.project.reference || 'Sans référence'}</p>
           </div>
-          <span className="num shrink-0 rounded-[4px] border border-ink/70 px-2 py-0.5 text-[13px] font-semibold tracking-[0.12em]">{it.project.access_code}</span>
+          <span className="num shrink-0 rounded-[4px] border border-ink/70 px-2 py-0.5 text-[0.8125rem] font-semibold tracking-[0.12em]">{it.project.access_code}</span>
         </div>
-        <dl className="grid grid-cols-3 gap-3 text-[14px]">
+        <dl className="grid grid-cols-3 gap-3 text-[0.875rem]">
           <div>
-            <dt className="text-[12.5px] text-ink-3">Lots</dt>
+            <dt className="text-[0.7812rem] text-ink-3">Lots</dt>
             <dd className="num font-semibold">{it.lots.length}</dd>
           </div>
           <div>
-            <dt className="text-[12.5px] text-ink-3">Offres reçues</dt>
+            <dt className="text-[0.7812rem] text-ink-3">Offres reçues</dt>
             <dd className="num font-semibold">{submitted}</dd>
           </div>
           <div>
-            <dt className="text-[12.5px] text-ink-3">Prochaine remise</dt>
+            <dt className="text-[0.7812rem] text-ink-3">Prochaine remise</dt>
             <dd className={cx('num font-semibold', next != null && next <= 3 && 'text-warn')}>{next == null ? '—' : next === 0 ? 'ce soir' : `J−${next}`}</dd>
           </div>
         </dl>
-        <span className="mt-auto inline-flex items-center gap-1 text-[14px] font-medium text-plan">
+        <span className="mt-auto inline-flex items-center gap-1 text-[0.875rem] font-medium text-plan">
           Ouvrir le projet <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
         </span>
       </Link>
@@ -230,7 +230,7 @@ function ProjectFormBody({
       <Field label="Présentation pour les entreprises" htmlFor="pr-desc" hint="Adresse du chantier, planning, contacts… visible des entreprises.">
         <textarea id="pr-desc" rows={3} className="field resize-y" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
       </Field>
-      {error && <p className="text-[14px] text-bad">{error}</p>}
+      {error && <p className="text-[0.875rem] text-bad">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
           Annuler
@@ -270,7 +270,7 @@ function CompanyHome({ items, error, reload }: { items: ProjectListItem[] | null
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-title text-[34px] leading-none font-bold sm:text-[40px]">Mes consultations</h1>
+        <h1 className="font-title text-[2.125rem] leading-none font-bold sm:text-[2.5rem]">Mes consultations</h1>
         <p className="mt-2 text-ink-2">Les projets sur lesquels vous êtes invité à remettre une offre.</p>
       </div>
       <JoinCodeBox onJoined={(pid) => nav(`/p/${pid}`)} />
@@ -288,8 +288,8 @@ function CompanyHome({ items, error, reload }: { items: ProjectListItem[] | null
             return (
               <li key={it.project.id}>
                 <Link to={`/p/${it.project.id}`} className="panel group flex h-full flex-col gap-3 p-5 hover:border-ink-3">
-                  <h3 className="text-[19px] font-semibold">{it.project.name}</h3>
-                  <p className="text-[14px] text-ink-2">
+                  <h3 className="text-[1.1875rem] font-semibold">{it.project.name}</h3>
+                  <p className="text-[0.875rem] text-ink-2">
                     <span className="num font-semibold text-ink">{it.lots.length}</span> lot{it.lots.length > 1 ? 's' : ''},{' '}
                     <span className="num font-semibold text-ink">{sent}</span> offre{sent > 1 ? 's' : ''} envoyée{sent > 1 ? 's' : ''}
                     {open.length > 0 && (
@@ -298,7 +298,7 @@ function CompanyHome({ items, error, reload }: { items: ProjectListItem[] | null
                       </>
                     )}
                   </p>
-                  <span className="mt-auto inline-flex items-center gap-1 text-[14px] font-medium text-plan">
+                  <span className="mt-auto inline-flex items-center gap-1 text-[0.875rem] font-medium text-plan">
                     Voir les lots <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
                   </span>
                 </Link>
@@ -335,12 +335,12 @@ export function JoinCodeBox({ onJoined, initial = '' }: { onJoined: (pid: string
       }}
     >
       <div className="flex flex-col gap-1">
-        <label htmlFor="join-code" className="flex items-center gap-2 text-[17px] font-semibold">
+        <label htmlFor="join-code" className="flex items-center gap-2 text-[1.0625rem] font-semibold">
           <KeyRound size={18} className="text-plan" /> Rejoindre un projet
         </label>
-        <p className="text-[14px] text-ink-2">Saisissez le code de 6 caractères transmis par l’acheteur.</p>
+        <p className="text-[0.875rem] text-ink-2">Saisissez le code de 6 caractères transmis par l’acheteur.</p>
         {error && (
-          <p className="text-[14px] text-bad" role="alert">
+          <p className="text-[0.875rem] text-bad" role="alert">
             {error}
           </p>
         )}
@@ -349,7 +349,7 @@ export function JoinCodeBox({ onJoined, initial = '' }: { onJoined: (pid: string
         <div key={shakeKey} className={cx('w-full md:w-[260px]', shakeKey > 0 && 'anim-shake')}>
           <input
             id="join-code"
-            className="field num h-14 text-center text-[28px] font-semibold tracking-[0.4em] uppercase"
+            className="field num h-14 text-center text-[1.75rem] font-semibold tracking-[0.4em] uppercase"
             placeholder="······"
             autoComplete="off"
             autoCapitalize="characters"

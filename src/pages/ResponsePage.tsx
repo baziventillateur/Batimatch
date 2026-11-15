@@ -103,7 +103,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link to={`/p/${pid}`} className="inline-flex items-center gap-1 text-[14px] text-ink-2 hover:text-ink">
+        <Link to={`/p/${pid}`} className="inline-flex items-center gap-1 text-[0.875rem] text-ink-2 hover:text-ink">
           <ChevronLeft size={16} /> {c.affaire}
         </Link>
         {!closed && <SaveIndicator />}
@@ -112,9 +112,9 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
       <section className="cartouche">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink/25 px-4 py-3 sm:px-5">
           <div className="min-w-0">
-            <p className="text-[13.5px] text-ink-3">{c.affaire}</p>
-            <h1 className="font-title text-[30px] leading-[1.05] font-bold sm:text-[36px]">{c.name}</h1>
-            {c.lot && <p className="text-[14.5px] text-ink-2">{c.lot}</p>}
+            <p className="text-[0.8438rem] text-ink-3">{c.affaire}</p>
+            <h1 className="font-title text-[1.875rem] leading-[1.05] font-bold sm:text-[2.25rem]">{c.name}</h1>
+            {c.lot && <p className="text-[0.9062rem] text-ink-2">{c.lot}</p>}
           </div>
           <StatusPill status={sent ? 'sent' : nothingYet ? 'none' : 'draft'} />
         </div>
@@ -122,7 +122,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
           <div className="cartouche-cell border-r">
             <dt className="cartouche-label">Date de rendu</dt>
             <dd className="num font-medium">
-              {fmtDate(c.dueDate)} <span className={cx('ml-1 text-[13px] font-normal', due.tone === 'warn' ? 'text-warn' : 'text-ink-3')}>{due.text}</span>
+              {fmtDate(c.dueDate)} <span className={cx('ml-1 text-[0.8125rem] font-normal', due.tone === 'warn' ? 'text-warn' : 'text-ink-3')}>{due.text}</span>
             </dd>
           </div>
           <div className="cartouche-cell md:border-r">
@@ -139,7 +139,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
       </section>
 
       {closed ? (
-        <p className="flex items-center gap-2 rounded-md border border-line bg-paper px-4 py-3 text-[14.5px]">
+        <p className="flex items-center gap-2 rounded-md border border-line bg-paper px-4 py-3 text-[0.9062rem]">
           <Lock size={16} /> La date de rendu est passée : {sent ? 'votre offre a été transmise et ne peut plus être modifiée.' : 'il n’est plus possible de déposer une offre sur ce lot.'}
         </p>
       ) : justSent || sent ? (
@@ -148,20 +148,20 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
             <circle cx="14" cy="14" r="13" fill="var(--color-good)" />
             <path d="M8 14.5l4 4 8-9" fill="none" stroke="white" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className={justSent ? 'anim-draw' : ''} />
           </svg>
-          <div className="text-[14.5px]">
+          <div className="text-[0.9062rem]">
             <p className="font-semibold">Offre transmise{offer.submittedAt ? ` le ${fmtDate(offer.submittedAt.slice(0, 10))}` : ''}.</p>
             <p className="text-ink-2">Vous pouvez encore la modifier jusqu’au {fmtDate(c.dueDate)} : chaque modification est transmise automatiquement à l’acheteur.</p>
           </div>
         </div>
       ) : (
-        <p className="flex items-center gap-2 rounded-md border border-plan/25 bg-plan-soft/60 px-4 py-3 text-[14.5px]">
+        <p className="flex items-center gap-2 rounded-md border border-plan/25 bg-plan-soft/60 px-4 py-3 text-[0.9062rem]">
           <Clock size={16} className="text-plan" /> Votre saisie est enregistrée au fur et à mesure, mais l’acheteur ne la voit qu’une fois l’offre envoyée.
         </p>
       )}
 
       {c.description && (
-        <section className="panel px-4 py-3 text-[14.5px] sm:px-5">
-          <p className="text-[13px] font-semibold text-ink-2">Consignes de l’acheteur</p>
+        <section className="panel px-4 py-3 text-[0.9062rem] sm:px-5">
+          <p className="text-[0.8125rem] font-semibold text-ink-2">Consignes de l’acheteur</p>
           <p className="whitespace-pre-line">{c.description}</p>
         </section>
       )}
@@ -172,18 +172,18 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
             <div className="flex items-center gap-3">
               <CompanyLogo name={offer.company || '?'} url={offer.logoUrl} size={48} />
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] text-ink-3">Offre de</p>
-                <p className="truncate text-[18px] font-semibold">{offer.company || 'Votre entreprise'}</p>
+                <p className="text-[0.8125rem] text-ink-3">Offre de</p>
+                <p className="truncate text-[1.125rem] font-semibold">{offer.company || 'Votre entreprise'}</p>
               </div>
-              <Link to="/profil" className="text-[13.5px] text-plan hover:underline">
+              <Link to="/profil" className="text-[0.8438rem] text-plan hover:underline">
                 Modifier le logo
               </Link>
             </div>
             <div className="grid gap-2 sm:grid-cols-4">
-              <input aria-label="Prénom" disabled={closed} className="field h-9 py-1 text-[14px] disabled:bg-paper" placeholder="Prénom" value={contact.firstName} onChange={(e) => setContact({ firstName: e.target.value })} />
-              <input aria-label="Nom" disabled={closed} className="field h-9 py-1 text-[14px] disabled:bg-paper" placeholder="Nom" value={contact.lastName} onChange={(e) => setContact({ lastName: e.target.value })} />
-              <input aria-label="Email" type="email" disabled={closed} className="field h-9 py-1 text-[14px] disabled:bg-paper" placeholder="Email" value={contact.email} onChange={(e) => setContact({ email: e.target.value })} />
-              <input aria-label="Téléphone" type="tel" disabled={closed} className="field h-9 py-1 text-[14px] disabled:bg-paper" placeholder="Téléphone" value={contact.phone} onChange={(e) => setContact({ phone: e.target.value })} />
+              <input aria-label="Prénom" disabled={closed} className="field h-9 py-1 text-[0.875rem] disabled:bg-paper" placeholder="Prénom" value={contact.firstName} onChange={(e) => setContact({ firstName: e.target.value })} />
+              <input aria-label="Nom" disabled={closed} className="field h-9 py-1 text-[0.875rem] disabled:bg-paper" placeholder="Nom" value={contact.lastName} onChange={(e) => setContact({ lastName: e.target.value })} />
+              <input aria-label="Email" type="email" disabled={closed} className="field h-9 py-1 text-[0.875rem] disabled:bg-paper" placeholder="Email" value={contact.email} onChange={(e) => setContact({ email: e.target.value })} />
+              <input aria-label="Téléphone" type="tel" disabled={closed} className="field h-9 py-1 text-[0.875rem] disabled:bg-paper" placeholder="Téléphone" value={contact.phone} onChange={(e) => setContact({ phone: e.target.value })} />
             </div>
           </section>
 
@@ -191,7 +191,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
           <ExtrasEditor c={c} offer={offer} readOnly={closed} buyer={false} />
 
           <section className="panel grid gap-3 p-4" aria-label="Conditions">
-            <h3 className="font-title text-[20px] font-semibold">Conditions de votre offre</h3>
+            <h3 className="font-title text-[1.25rem] font-semibold">Conditions de votre offre</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Délai d’exécution" htmlFor="r-delay">
                 <NumberInput id="r-delay" disabled={closed} className="h-9 py-1 disabled:bg-paper" suffix="sem." value={offer.durationWeeks} onCommit={(v) => updateOffer(c.id, offer.id, { durationWeeks: v })} />
@@ -201,10 +201,10 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
               </Field>
             </div>
             <Field label="Réserves et exclusions" htmlFor="r-res">
-              <textarea id="r-res" rows={3} disabled={closed} className="field resize-y text-[14px] disabled:bg-paper" value={offer.reserves} onChange={(e) => updateOffer(c.id, offer.id, { reserves: e.target.value })} />
+              <textarea id="r-res" rows={3} disabled={closed} className="field resize-y text-[0.875rem] disabled:bg-paper" value={offer.reserves} onChange={(e) => updateOffer(c.id, offer.id, { reserves: e.target.value })} />
             </Field>
             <Field label="Message à l’acheteur" htmlFor="r-msg">
-              <textarea id="r-msg" rows={2} disabled={closed} className="field resize-y text-[14px] disabled:bg-paper" placeholder="Moyens, références, disponibilité…" value={offer.message} onChange={(e) => updateOffer(c.id, offer.id, { message: e.target.value })} />
+              <textarea id="r-msg" rows={2} disabled={closed} className="field resize-y text-[0.875rem] disabled:bg-paper" placeholder="Moyens, références, disponibilité…" value={offer.message} onChange={(e) => updateOffer(c.id, offer.id, { message: e.target.value })} />
             </Field>
           </section>
         </div>
@@ -212,7 +212,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
         <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
           <Recap c={c} offer={offer} totals={totals} readOnly={closed} />
           {!closed && !sent && (
-            <Button variant="primary" className="hidden h-12 text-[16px] lg:inline-flex" icon={<Send size={18} />} onClick={() => setConfirming(true)} disabled={nothingYet}>
+            <Button variant="primary" className="hidden h-12 text-[1rem] lg:inline-flex" icon={<Send size={18} />} onClick={() => setConfirming(true)} disabled={nothingYet}>
               Envoyer mon offre
             </Button>
           )}
@@ -225,7 +225,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
             Envoyer
           </Button>
         ) : sent ? (
-          <span className="inline-flex items-center gap-1 text-[14px] font-medium text-good">
+          <span className="inline-flex items-center gap-1 text-[0.875rem] font-medium text-good">
             <CheckCircle2 size={16} /> Transmise
           </span>
         ) : undefined}
@@ -246,7 +246,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
           </>
         }
       >
-        <div className="grid gap-3 text-[15px]">
+        <div className="grid gap-3 text-[0.9375rem]">
           <p>
             Montant de votre offre : <strong className="num">{fmtEur(totals.net)} HT</strong>
             {totals.pse > 0 && <> (+ {fmtEur(totals.pse)} de PSE)</>}.

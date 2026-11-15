@@ -42,7 +42,7 @@ export default function OffersTab() {
       <EmptyState
         title="La DPGF est vide"
         action={
-          <Link to="../dpgf" relative="path" className="inline-flex h-10 items-center rounded-[5px] bg-plan px-3.5 font-medium text-white hover:bg-plan-dark">
+          <Link to="../dpgf" relative="path" className="inline-flex h-10 items-center rounded-[5px] bg-plan px-3.5 font-medium text-sheet hover:bg-plan-dark">
             Saisir la DPGF
           </Link>
         }
@@ -55,7 +55,7 @@ export default function OffersTab() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-[64ch] text-[14.5px] text-ink-2">
+        <p className="max-w-[64ch] text-[0.9062rem] text-ink-2">
           Les offres envoyées par les entreprises apparaissent ici automatiquement. Vous pouvez aussi saisir une offre reçue par mail, ou une version négociée.
         </p>
         <Button variant="primary" icon={<Plus size={18} />} onClick={() => setAdding(true)}>
@@ -78,8 +78,8 @@ export default function OffersTab() {
                   <div className="flex min-w-0 items-center gap-3">
                     <CompanyLogo name={latest.company || '?'} url={latest.logoUrl} size={44} />
                     <div className="min-w-0">
-                      <h3 className="truncate text-[18px] font-semibold">{latest.company || 'Entreprise sans nom'}</h3>
-                      <p className="truncate text-[13px] text-ink-3">
+                      <h3 className="truncate text-[1.125rem] font-semibold">{latest.company || 'Entreprise sans nom'}</h3>
+                      <p className="truncate text-[0.8125rem] text-ink-3">
                         {[latest.contact.firstName, latest.contact.lastName].filter(Boolean).join(' ') || 'Contact non renseigné'}
                         {c.awardedOfferId && list.some((o) => o.id === c.awardedOfferId) && <span className="ml-2 font-semibold text-good">Retenue</span>}
                       </p>
@@ -104,15 +104,15 @@ export default function OffersTab() {
                     return (
                       <li key={o.id} className="flex items-center gap-2 border-t border-line-2 pr-2 pl-4 sm:pl-5">
                         <Link to={o.id} className="grid min-w-0 flex-1 grid-cols-[2.75rem_1fr_auto] items-center gap-3 py-3">
-                          <span className={cx('num rounded-[4px] border px-1.5 py-0.5 text-center text-[13px] font-semibold', o === latest ? 'border-ink text-ink' : 'border-line text-ink-3')}>V{o.version}</span>
+                          <span className={cx('num rounded-[4px] border px-1.5 py-0.5 text-center text-[0.8125rem] font-semibold', o === latest ? 'border-ink text-ink' : 'border-line text-ink-3')}>V{o.version}</span>
                           <span className="min-w-0">
                             <span className="num block font-semibold">{declared ? fmtEur(declared) : 'À chiffrer'}</span>
-                            <span className="block text-[12.5px] text-ink-3">
+                            <span className="block text-[0.7812rem] text-ink-3">
                               {o.source === 'platform' ? `Envoyée en ligne le ${fmtDate((o.submittedAt ?? '').slice(0, 10) || null)}` : `Saisie par vous, reçue le ${fmtDate(o.receivedAt)}`}
                             </span>
                           </span>
                           <span className="w-24 sm:w-32">
-                            <span className="num mb-1 block text-right text-[12.5px] text-ink-3">
+                            <span className="num mb-1 block text-right text-[0.7812rem] text-ink-3">
                               {filled}/{total} lignes
                             </span>
                             <Progress value={total ? filled / total : 0} />
@@ -153,7 +153,7 @@ export default function OffersTab() {
           </h3>
           <ul className="flex flex-wrap gap-2">
             {waiting.map((m) => (
-              <li key={m.user_id} className="inline-flex items-center gap-2 rounded-full border border-line py-1 pr-3 pl-1 text-[14px]">
+              <li key={m.user_id} className="inline-flex items-center gap-2 rounded-full border border-line py-1 pr-3 pl-1 text-[0.875rem]">
                 <CompanyLogo name={m.profile?.company_name || '?'} url={m.profile?.logo_url} size={24} />
                 {m.profile?.company_name || 'Entreprise'}
               </li>
@@ -164,8 +164,8 @@ export default function OffersTab() {
 
       {groups.length >= 2 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-plan/25 bg-plan-soft/60 px-4 py-3">
-          <p className="text-[14.5px]">{groups.length} entreprises ont répondu : place à la décision.</p>
-          <Link to="../decision" relative="path" className="inline-flex h-9 items-center rounded-[5px] bg-plan px-3.5 font-medium text-white hover:bg-plan-dark">
+          <p className="text-[0.9062rem]">{groups.length} entreprises ont répondu : place à la décision.</p>
+          <Link to="../decision" relative="path" className="inline-flex h-9 items-center rounded-[5px] bg-plan px-3.5 font-medium text-sheet hover:bg-plan-dark">
             Aider à décider
           </Link>
         </div>
@@ -229,7 +229,7 @@ function AddOfferForm({ onClose }: { onClose: () => void }) {
       </Field>
       {existing ? (
         <div className="grid gap-2 rounded-md border border-line bg-paper p-3">
-          <p className="text-[14px]">
+          <p className="text-[0.875rem]">
             {existing.company} a déjà une offre <span className="num font-semibold">V{existing.version}</span>. Celle-ci deviendra la{' '}
             <span className="num font-semibold">V{existing.version + 1}</span>.
           </p>

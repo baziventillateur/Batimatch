@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { LogOut, Shield, UserRound } from 'lucide-react'
+import { LogOut, Moon, Shield, Sun, UserRound } from 'lucide-react'
 import { AuthProvider, useAuth } from './data/auth'
 import { api, errorMessage } from './data'
-import { Button, CompanyLogo, Dialog, Field, Loading, Menu, MenuItem } from './components/ui'
+import { Button, CompanyLogo, Dialog, Field, IconButton, Loading, Menu, MenuItem } from './components/ui'
+import { useTheme } from './lib/theme'
 import AuthPage from './pages/AuthPage'
 import Home from './pages/Home'
 import ProfilePage from './pages/ProfilePage'
@@ -24,13 +25,24 @@ function Logo() {
   return (
     <Link to="/" className="flex items-center gap-2.5 rounded-sm" aria-label="Batimatch, retour à l’accueil">
       <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
-        <rect width="32" height="32" rx="6" fill="#1B2A3A" />
-        <rect x="6" y="19" width="5" height="7" fill="#F3F5F8" />
-        <rect x="13.5" y="13" width="5" height="13" fill="#F3F5F8" />
+        <rect width="32" height="32" rx="6" fill="var(--color-ink)" />
+        <rect x="6" y="19" width="5" height="7" fill="var(--color-sheet)" />
+        <rect x="13.5" y="13" width="5" height="13" fill="var(--color-sheet)" />
         <rect x="21" y="8" width="5" height="18" fill="#F8E04E" />
       </svg>
-      <span className="font-title text-[23px] leading-none font-bold tracking-[0.01em]">batimatch</span>
+      <span className="font-title text-[1.4375rem] leading-none font-bold tracking-[0.01em]">Batimatch</span>
     </Link>
+  )
+}
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme()
+  return (
+    <IconButton label={theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'} onClick={toggle}>
+      <span key={theme} className="anim-turn inline-flex">
+        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+      </span>
+    </IconButton>
   )
 }
 
@@ -40,10 +52,11 @@ function UserMenu() {
   if (!profile) return null
   const name = profile.companyName || [profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.email
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
+      <ThemeToggle />
       <span className="hidden text-right leading-tight sm:block">
-        <span className="block text-[14px] font-medium">{name}</span>
-        <span className="block text-[12px] text-ink-3">{profile.role === 'buyer' ? 'Acheteur' : 'Entreprise'}</span>
+        <span className="block text-[0.875rem] font-medium">{name}</span>
+        <span className="block text-[0.75rem] text-ink-3">{profile.role === 'buyer' ? 'Acheteur' : 'Entreprise'}</span>
       </span>
       <CompanyLogo name={name} url={profile.logoUrl} size={32} />
       <Menu label="Mon compte" icon={<UserRound size={18} />}>
@@ -97,7 +110,7 @@ function PasswordRecovery() {
         <Field label="Choisissez un nouveau mot de passe" htmlFor="np">
           <input id="np" type="password" minLength={6} required className="field" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
         </Field>
-        {msg && <p className="text-[14px] text-bad">{msg}</p>}
+        {msg && <p className="text-[0.875rem] text-bad">{msg}</p>}
         <Button type="submit" variant="primary">
           Enregistrer le mot de passe
         </Button>
@@ -128,17 +141,18 @@ function Shell() {
   return (
     <div className="flex min-h-dvh flex-col">
       {api.kind === 'mock' && (
-        <p className="no-print bg-marker px-4 py-1 text-center text-[13px] font-medium">
+        <p className="no-print bg-marker px-4 py-1 text-center text-night text-[0.8125rem] font-medium">
           Mode démonstration : les données restent dans ce navigateur.
         </p>
       )}
       <header className="no-print border-b border-line bg-sheet">
-        <div className="mx-auto flex h-14 max-w-[1320px] items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="mx-auto flex h-12 max-w-[1320px] sm:h-14 items-center justify-between gap-4 px-3 sm:px-6">
           <Logo />
           <UserMenu />
         </div>
       </header>
-      <main className="mx-auto w-full max-w-[1320px] flex-1 px-4 pt-5 pb-28 sm:px-6 sm:pt-7">
+      <main className="mx-auto w-full max-w-[1320px] flex-1 px-3 pt-3 pb-24 sm:px-6 sm:pt-7">
+        <div key={loc.pathname.split('/').slice(0, 5).join('/')} className="anim-fade">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/profil" element={<ProfilePage />} />
@@ -162,6 +176,7 @@ function Shell() {
           )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </div>
       </main>
     </div>
   )

@@ -6,6 +6,7 @@
 @import '@fontsource/barlow-semi-condensed/400.css';
 @import '@fontsource/barlow-semi-condensed/500.css';
 @import '@fontsource/barlow-semi-condensed/600.css';
+@import '@fontsource/barlow-semi-condensed/700.css';
 @import '@fontsource/barlow-condensed/600.css';
 @import '@fontsource/barlow-condensed/700.css';
 
@@ -26,6 +27,8 @@
   --color-plan-dark: #1f4770;
   --color-plan-soft: #e3edf7;
   --color-marker: #f8e04e;
+  /* Encre fixe : texte posé sur le surligneur ou sur un fond toujours sombre */
+  --color-night: #1b2a3a;
   --color-good: #1d7344;
   --color-good-soft: #e3f3ea;
   --color-bad: #b42318;
@@ -42,15 +45,50 @@
   --font-title: 'Barlow Condensed', 'Barlow Semi Condensed', ui-sans-serif, sans-serif;
 }
 
+/* Mode sombre : mêmes rôles, valeurs choisies pour l'écran (l'impression reste claire) */
+@media screen {
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --color-paper: #0e151e;
+    --color-sheet: #16202c;
+    --color-ink: #e7edf3;
+    --color-ink-2: #b1bdc9;
+    --color-ink-3: #8593a1;
+    --color-line: #2b3948;
+    --color-line-2: #212d3a;
+    --color-plan: #74abe4;
+    --color-plan-dark: #93c0ef;
+    --color-plan-soft: #172b41;
+    --color-marker: #f1d443;
+    --color-good: #4fc48c;
+    --color-good-soft: #112e1f;
+    --color-bad: #f47c71;
+    --color-bad-soft: #3a1b18;
+    --color-warn: #e6ab42;
+    --color-warn-soft: #36280d;
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
     font-feature-settings: 'tnum' 0;
+    color-scheme: light;
+  }
+  /* Petits écrans : tout est défini en rem, on resserre donc l'ensemble d'un cran */
+  @media (max-width: 639px) {
+    html {
+      font-size: 14px;
+    }
+    body {
+      font-family: var(--font-cond);
+    }
   }
   body {
     @apply bg-paper text-ink font-sans antialiased;
-    font-size: 15px;
-    line-height: 1.5;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
   :focus-visible {
     outline: 2px solid var(--color-plan);
@@ -97,6 +135,7 @@
     background-size: 100% 78%;
     background-position: 0 62%;
     background-repeat: no-repeat;
+    color: var(--color-night);
     padding: 0 0.3em;
     margin: 0 -0.3em;
     border-radius: 0.2em 0.4em 0.25em 0.5em;
@@ -109,14 +148,14 @@
   }
 
   .field {
-    @apply w-full rounded-[5px] border border-line bg-sheet px-3 py-2 text-[15px] transition-colors;
+    @apply w-full rounded-[5px] border border-line bg-sheet px-3 py-2 text-[0.9375rem] transition-colors;
     @apply placeholder:text-ink-3 hover:border-ink-3 focus:border-plan focus:outline-none;
   }
   .field:focus {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-plan) 18%, transparent);
   }
   .field-bare {
-    @apply w-full rounded-[4px] border border-transparent bg-transparent px-2 py-1.5;
+    @apply w-full rounded-[4px] border border-transparent bg-transparent px-1.5 py-1 sm:px-2 sm:py-1.5;
     @apply hover:border-line focus:border-plan focus:bg-sheet focus:outline-none;
   }
   .field-bare:focus {
@@ -128,10 +167,10 @@
     @apply border border-ink/80 bg-sheet;
   }
   .cartouche-cell {
-    @apply border-ink/25 px-4 py-3;
+    @apply border-ink/25 px-3 py-1.5 sm:px-4 sm:py-3;
   }
   .cartouche-label {
-    @apply text-[12.5px] leading-tight text-ink-3;
+    @apply text-[0.7812rem] leading-tight text-ink-3;
   }
 
   .panel {
@@ -139,7 +178,7 @@
   }
 
   .tip {
-    @apply pointer-events-none fixed z-50 max-w-[280px] rounded-md bg-ink px-3 py-2 text-[13px] leading-snug text-white shadow-lg;
+    @apply pointer-events-none fixed z-50 max-w-[280px] rounded-md bg-ink px-3 py-2 text-[0.8125rem] leading-snug text-sheet shadow-lg;
   }
 
   .scroll-x {
@@ -206,6 +245,24 @@
   50% {
     opacity: 0.45;
   }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes turn {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.6);
+  }
+}
+.anim-fade {
+  animation: fade-in 0.22s ease-out both;
+}
+.anim-turn {
+  animation: turn 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
 }
 .anim-rise {
   transform-origin: bottom;

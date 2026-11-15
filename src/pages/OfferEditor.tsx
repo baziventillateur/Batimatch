@@ -43,7 +43,7 @@ function BuyerOffer({ offer }: { offer: Offer }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Link to=".." relative="path" className="inline-flex items-center gap-1 text-[14px] text-ink-2 hover:text-ink">
+        <Link to=".." relative="path" className="inline-flex items-center gap-1 text-[0.875rem] text-ink-2 hover:text-ink">
           <ChevronLeft size={16} /> Toutes les offres
         </Link>
         {siblings.length > 1 && (
@@ -54,8 +54,8 @@ function BuyerOffer({ offer }: { offer: Offer }) {
                 to={`../${o.id}`}
                 relative="path"
                 className={cx(
-                  'inline-flex items-center gap-1.5 rounded-full border py-0.5 pr-2.5 pl-1 text-[13px] whitespace-nowrap',
-                  o.id === offer.id ? 'border-ink bg-ink text-white' : 'border-line bg-sheet text-ink-2 hover:border-ink-3',
+                  'inline-flex items-center gap-1.5 rounded-full border py-0.5 pr-2.5 pl-1 text-[0.8125rem] whitespace-nowrap',
+                  o.id === offer.id ? 'border-ink bg-ink text-sheet' : 'border-line bg-sheet text-ink-2 hover:border-ink-3',
                 )}
               >
                 <CompanyLogo name={o.company || '?'} url={o.logoUrl} size={20} />
@@ -70,14 +70,14 @@ function BuyerOffer({ offer }: { offer: Offer }) {
         <div className="flex min-w-0 flex-col gap-4">
           <CompanyHeader c={c} offer={offer} editable={!readOnly} />
           {readOnly && (
-            <p className="flex items-center gap-2 rounded-md border border-line bg-paper px-3 py-2 text-[14px] text-ink-2">
+            <p className="flex items-center gap-2 rounded-md border border-line bg-paper px-3 py-2 text-[0.875rem] text-ink-2">
               <Lock size={15} /> Offre déposée par l’entreprise sur Batimatch{offer.submittedAt ? ` le ${fmtDate(offer.submittedAt.slice(0, 10))}` : ''} : elle seule peut la
               modifier, jusqu’à la date de rendu.
             </p>
           )}
           {offer.message && (
-            <blockquote className="rounded-md border-l-4 border-plan bg-plan-soft/60 px-4 py-2.5 text-[14.5px]">
-              <p className="text-[12.5px] font-medium text-plan-dark">Message de l’entreprise</p>
+            <blockquote className="rounded-md border-l-4 border-plan bg-plan-soft/60 px-4 py-2.5 text-[0.9062rem]">
+              <p className="text-[0.7812rem] font-medium text-plan-dark">Message de l’entreprise</p>
               <p className="whitespace-pre-line">{offer.message}</p>
             </blockquote>
           )}
@@ -100,7 +100,7 @@ function BuyerOffer({ offer }: { offer: Offer }) {
               </Field>
             </div>
             <Field label="Réserves et exclusions" htmlFor="o-res" hint="Reprises dans les points de vigilance du comparatif.">
-              <textarea id="o-res" rows={3} disabled={readOnly} className="field resize-y text-[14px] disabled:bg-paper" value={offer.reserves} onChange={(e) => updateOffer(c.id, offer.id, { reserves: e.target.value })} />
+              <textarea id="o-res" rows={3} disabled={readOnly} className="field resize-y text-[0.875rem] disabled:bg-paper" value={offer.reserves} onChange={(e) => updateOffer(c.id, offer.id, { reserves: e.target.value })} />
             </Field>
           </section>
           <div className="no-print flex flex-wrap gap-2">
@@ -186,22 +186,22 @@ function CompanyHeader({ c, offer, editable }: { c: Consultation; offer: Offer; 
         {editable ? (
           <input
             aria-label="Entreprise"
-            className="field-bare -ml-1 min-w-0 flex-1 font-title text-[28px] leading-tight font-bold"
+            className="field-bare -ml-1 min-w-0 flex-1 font-title text-[1.75rem] leading-tight font-bold"
             placeholder="Nom de l’entreprise"
             value={offer.company}
             onChange={(e) => updateOffer(c.id, offer.id, { company: e.target.value })}
           />
         ) : (
-          <h2 className="min-w-0 flex-1 font-title text-[28px] leading-tight font-bold">{offer.company}</h2>
+          <h2 className="min-w-0 flex-1 font-title text-[1.75rem] leading-tight font-bold">{offer.company}</h2>
         )}
-        <span className="num rounded-[4px] border border-ink px-2 py-0.5 text-[14px] font-semibold">V{offer.version}</span>
+        <span className="num rounded-[4px] border border-ink px-2 py-0.5 text-[0.875rem] font-semibold">V{offer.version}</span>
       </div>
       {editable ? (
         <div className="grid gap-2 sm:grid-cols-4">
-          <input aria-label="Prénom du contact" className="field h-9 py-1 text-[14px]" placeholder="Prénom" value={offer.contact.firstName} onChange={(e) => setContact({ firstName: e.target.value })} />
-          <input aria-label="Nom du contact" className="field h-9 py-1 text-[14px]" placeholder="Nom" value={offer.contact.lastName} onChange={(e) => setContact({ lastName: e.target.value })} />
-          <input aria-label="Email" type="email" className="field h-9 py-1 text-[14px]" placeholder="Email" value={offer.contact.email} onChange={(e) => setContact({ email: e.target.value })} />
-          <input aria-label="Téléphone" type="tel" className="field h-9 py-1 text-[14px]" placeholder="Téléphone" value={offer.contact.phone} onChange={(e) => setContact({ phone: e.target.value })} />
+          <input aria-label="Prénom du contact" className="field h-9 py-1 text-[0.875rem]" placeholder="Prénom" value={offer.contact.firstName} onChange={(e) => setContact({ firstName: e.target.value })} />
+          <input aria-label="Nom du contact" className="field h-9 py-1 text-[0.875rem]" placeholder="Nom" value={offer.contact.lastName} onChange={(e) => setContact({ lastName: e.target.value })} />
+          <input aria-label="Email" type="email" className="field h-9 py-1 text-[0.875rem]" placeholder="Email" value={offer.contact.email} onChange={(e) => setContact({ email: e.target.value })} />
+          <input aria-label="Téléphone" type="tel" className="field h-9 py-1 text-[0.875rem]" placeholder="Téléphone" value={offer.contact.phone} onChange={(e) => setContact({ phone: e.target.value })} />
         </div>
       ) : (
         <ContactLine offer={offer} name={contactName} />
@@ -214,7 +214,7 @@ export function ContactLine({ offer, name }: { offer: Offer; name?: string }) {
   const n = name ?? [offer.contact.firstName, offer.contact.lastName].filter(Boolean).join(' ')
   if (!n && !offer.contact.email && !offer.contact.phone) return null
   return (
-    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px] text-ink-2">
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.875rem] text-ink-2">
       {n && <span className="font-medium text-ink">{n}</span>}
       {offer.contact.email && (
         <a href={`mailto:${offer.contact.email}`} className="inline-flex items-center gap-1 text-plan hover:underline">
@@ -256,7 +256,7 @@ export function Recap({ c, offer, totals, readOnly }: { c: Consultation; offer: 
   const updateOffer = useStore((s) => s.updateOffer)
   return (
     <section className="panel p-4" aria-label="Récapitulatif">
-      <dl className="grid gap-2 text-[14.5px]">
+      <dl className="grid gap-2 text-[0.9062rem]">
         <div className="flex justify-between gap-3">
           <dt className="text-ink-2">Base déclarée</dt>
           <dd className="num font-medium">{fmtEur2(totals.base)}</dd>
@@ -282,7 +282,7 @@ export function Recap({ c, offer, totals, readOnly }: { c: Consultation; offer: 
         )}
         <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2">
           <dt className="font-semibold">Base nette HT</dt>
-          <dd className="num text-[22px] font-semibold">{fmtEur(totals.net)}</dd>
+          <dd className="num text-[1.375rem] font-semibold">{fmtEur(totals.net)}</dd>
         </div>
         {totals.pse > 0 && (
           <div className="flex justify-between gap-3 text-ink-2">
@@ -292,7 +292,7 @@ export function Recap({ c, offer, totals, readOnly }: { c: Consultation; offer: 
         )}
       </dl>
       <div className="mt-3 grid gap-1.5">
-        <div className="flex justify-between text-[13px] text-ink-2">
+        <div className="flex justify-between text-[0.8125rem] text-ink-2">
           <span>Lignes de base renseignées</span>
           <span className="num">
             {totals.filled}/{totals.total}
@@ -309,12 +309,12 @@ export function MobileTotalBar({ net, filled, total, children }: { net: number; 
     <div className="no-print fixed inset-x-0 bottom-0 z-20 border-t border-line bg-sheet/95 px-4 py-2.5 backdrop-blur lg:hidden">
       <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-4">
         <div>
-          <p className="text-[12px] text-ink-3">Base nette HT</p>
-          <p className="num text-[20px] leading-tight font-semibold">{fmtEur(net)}</p>
+          <p className="text-[0.75rem] text-ink-3">Base nette HT</p>
+          <p className="num text-[1.25rem] leading-tight font-semibold">{fmtEur(net)}</p>
         </div>
         {children ?? (
           <div className="w-32">
-            <p className="num mb-1 text-right text-[12px] text-ink-3">
+            <p className="num mb-1 text-right text-[0.75rem] text-ink-3">
               {filled}/{total} lignes
             </p>
             <Progress value={total ? filled / total : 0} />
@@ -418,7 +418,7 @@ export function PriceGrid({ c, offer, readOnly, showMedians }: { c: Consultation
         )}
         <label className="relative min-w-[160px] flex-1 sm:max-w-[260px]">
           <Search size={15} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
-          <input type="search" aria-label="Rechercher une ligne" className="field h-8 py-1 pl-8 text-[14px]" placeholder="Rechercher une ligne" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input type="search" aria-label="Rechercher une ligne" className="field h-8 py-1 pl-8 text-[0.875rem]" placeholder="Rechercher une ligne" value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
         {!readOnly && (
           <Button size="sm" icon={<ClipboardPaste size={15} />} onClick={() => setPasteOpen(true)} className="sm:ml-auto">
@@ -428,7 +428,7 @@ export function PriceGrid({ c, offer, readOnly, showMedians }: { c: Consultation
       </div>
 
       {undo && (
-        <div className="anim-pop flex items-center justify-between gap-3 rounded-md border border-good/30 bg-good-soft px-3 py-2 text-[14px]" role="status">
+        <div className="anim-pop flex items-center justify-between gap-3 rounded-md border border-good/30 bg-good-soft px-3 py-2 text-[0.875rem]" role="status">
           <span>{undo.text}.</span>
           <span className="flex gap-1">
             <Button
@@ -450,7 +450,7 @@ export function PriceGrid({ c, offer, readOnly, showMedians }: { c: Consultation
       )}
 
       <div ref={tableRef} className="panel overflow-hidden">
-        <div className="hidden grid-cols-[4rem_minmax(0,1fr)_3.25rem_6rem_8.5rem_8rem_5.5rem] gap-2 border-b border-line bg-paper/70 px-3 py-2 text-[13px] text-ink-3 md:grid">
+        <div className="hidden grid-cols-[4rem_minmax(0,1fr)_3.25rem_6rem_8.5rem_8rem_5.5rem] gap-2 border-b border-line bg-paper/70 px-3 py-2 text-[0.8125rem] text-ink-3 md:grid">
           <span>N°</span>
           <span>Désignation</span>
           <span>Unité</span>
@@ -464,11 +464,11 @@ export function PriceGrid({ c, offer, readOnly, showMedians }: { c: Consultation
           {rows.map((r) =>
             r.kind === 'chapter' ? (
               <li key={r.item.id} className="flex items-baseline justify-between gap-3 border-b border-line-2 bg-paper/80 px-3 py-2">
-                <span className="font-title text-[17px] font-semibold">
+                <span className="font-title text-[1.0625rem] font-semibold">
                   <span className="num mr-2 text-ink-2">{r.item.ref}</span>
                   {r.item.label}
                 </span>
-                <span className="num text-[14px] text-ink-2">{r.subtotal ? fmtEur(r.subtotal) : ''}</span>
+                <span className="num text-[0.875rem] text-ink-2">{r.subtotal ? fmtEur(r.subtotal) : ''}</span>
               </li>
             ) : (
               <PriceRow
@@ -487,7 +487,7 @@ export function PriceGrid({ c, offer, readOnly, showMedians }: { c: Consultation
         </ul>
       </div>
       {!readOnly && (
-        <p className="no-print text-[13px] text-ink-3">
+        <p className="no-print text-[0.8125rem] text-ink-3">
           Entrée ou ↓ : ligne suivante. Tapez « i » pour une prestation incluse. Collez une colonne Excel dans une case pour remplir les lignes suivantes.
         </p>
       )}
@@ -558,14 +558,14 @@ const PriceRow = memo(function PriceRow({
         value === undefined && !readOnly && 'bg-[linear-gradient(90deg,var(--color-warn-soft)_0_3px,transparent_3px)]',
       )}
     >
-      <span className="num hidden text-[14px] text-ink-2 md:block">{item.ref}</span>
+      <span className="num hidden text-[0.875rem] text-ink-2 md:block">{item.ref}</span>
       <div className="min-w-0">
-        <p className="text-[14.5px] leading-snug">
+        <p className="text-[0.9062rem] leading-snug">
           <span className="num mr-1.5 text-ink-3 md:hidden">{item.ref}</span>
           {item.label || <span className="text-ink-3">Sans désignation</span>}
-          {item.scope === 'option' && <span className="ml-2 rounded-[3px] bg-plan-soft px-1 text-[11.5px] font-semibold text-plan-dark">PSE</span>}
+          {item.scope === 'option' && <span className="ml-2 rounded-[3px] bg-plan-soft px-1 text-[0.7188rem] font-semibold text-plan-dark">PSE</span>}
         </p>
-        <p className="num mt-0.5 flex flex-wrap items-center gap-x-2 text-[12.5px] text-ink-3 md:hidden">
+        <p className="num mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.7812rem] text-ink-3 md:hidden">
           <span>
             {fmtNum(item.qty)} {item.unit}
           </span>
@@ -573,10 +573,10 @@ const PriceRow = memo(function PriceRow({
           <DeviationChip value={deviation} strong={strong} />
         </p>
       </div>
-      <span className="hidden text-[14px] text-ink-2 md:block">{item.unit}</span>
-      <span className={cx('num hidden text-right text-[14px] md:block', item.qty == null && 'text-warn')}>{item.qty == null ? 'à définir' : fmtNum(item.qty)}</span>
+      <span className="hidden text-[0.875rem] text-ink-2 md:block">{item.unit}</span>
+      <span className={cx('num hidden text-right text-[0.875rem] md:block', item.qty == null && 'text-warn')}>{item.qty == null ? 'à définir' : fmtNum(item.qty)}</span>
       {readOnly ? (
-        <span className={cx('num pr-3 text-right text-[15.5px] font-medium', value === 'inclus' && 'text-good italic', value === undefined && 'text-[13px] font-normal text-warn italic')}>
+        <span className={cx('num pr-3 text-right text-[0.9688rem] font-medium', value === 'inclus' && 'text-good italic', value === undefined && 'text-[0.8125rem] font-normal text-warn italic')}>
           {value === undefined ? 'non chiffré' : value === 'inclus' ? 'inclus' : fmtNum(value)}
         </span>
       ) : (
@@ -589,7 +589,7 @@ const PriceRow = memo(function PriceRow({
           data-pidx={idx}
           aria-label={`Prix unitaire, ${item.ref} ${item.label}`}
           title={med != null ? `Médiane des autres offres : ${fmtNum(med)} €` : undefined}
-          className={cx('field num h-10 py-1 text-right text-[16px] md:h-9 md:text-[15px]', value === 'inclus' && 'text-good italic', strong && 'border-bad/50')}
+          className={cx('field num h-10 py-1 text-right text-[1rem] md:h-9 md:text-[0.9375rem]', value === 'inclus' && 'text-good italic', strong && 'border-bad/50')}
           placeholder="PU"
           value={display}
           onFocus={() => {
@@ -603,7 +603,7 @@ const PriceRow = memo(function PriceRow({
           onPaste={onPaste}
         />
       )}
-      <span className="num hidden text-right text-[14.5px] md:block">{amount == null ? '' : value === 'inclus' ? 'inclus' : fmtEur2(amount)}</span>
+      <span className="num hidden text-right text-[0.9062rem] md:block">{amount == null ? '' : value === 'inclus' ? 'inclus' : fmtEur2(amount)}</span>
       <span className="hidden text-right md:block">
         <DeviationChip value={deviation} strong={strong} />
       </span>
@@ -639,21 +639,21 @@ export function ExtrasEditor({ c, offer, readOnly, buyer }: { c: Consultation; o
   return (
     <section className="panel" aria-labelledby={`extras-${offer.id}`}>
       <header className="border-b border-line-2 px-4 py-3">
-        <h3 id={`extras-${offer.id}`} className="font-title text-[20px] font-semibold">
+        <h3 id={`extras-${offer.id}`} className="font-title text-[1.25rem] font-semibold">
           Variantes et options proposées
         </h3>
-        <p className="text-[13.5px] text-ink-2">Variante : écart par rapport à la base, négatif si c’est une économie. Option : plus-value hors DPGF.</p>
+        <p className="text-[0.8438rem] text-ink-2">Variante : écart par rapport à la base, négatif si c’est une économie. Option : plus-value hors DPGF.</p>
       </header>
-      {offer.extras.length === 0 && readOnly && <p className="px-4 py-3 text-[14px] text-ink-3">Aucune variante ni option proposée.</p>}
+      {offer.extras.length === 0 && readOnly && <p className="px-4 py-3 text-[0.875rem] text-ink-3">Aucune variante ni option proposée.</p>}
       {offer.extras.length > 0 && (
         <ul>
           {offer.extras.map((e) => (
             <li key={e.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-line-2 px-4 py-2.5 sm:grid-cols-[6.5rem_minmax(0,1fr)_8rem_auto_auto]">
-              <span className={cx('w-fit rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold', e.kind === 'variante' ? 'bg-plan-soft text-plan-dark' : 'bg-warn-soft text-warn')}>
+              <span className={cx('w-fit rounded-[3px] px-1.5 py-0.5 text-[0.75rem] font-semibold', e.kind === 'variante' ? 'bg-plan-soft text-plan-dark' : 'bg-warn-soft text-warn')}>
                 {e.kind === 'variante' ? 'Variante' : 'Option'}
               </span>
               {readOnly ? (
-                <span className="col-span-2 col-start-1 row-start-2 min-w-0 text-[14.5px] sm:col-span-1 sm:col-start-auto sm:row-start-auto">{e.label}</span>
+                <span className="col-span-2 col-start-1 row-start-2 min-w-0 text-[0.9062rem] sm:col-span-1 sm:col-start-auto sm:row-start-auto">{e.label}</span>
               ) : (
                 <input
                   aria-label="Libellé"
@@ -720,11 +720,11 @@ export function ExtrasEditor({ c, offer, readOnly, buyer }: { c: Consultation; o
               ]}
             />
           </div>
-          <input aria-label="Libellé de la variante ou de l'option" className="field h-9 py-1 text-[14px]" placeholder="Libellé" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <input aria-label="Libellé de la variante ou de l'option" className="field h-9 py-1 text-[0.875rem]" placeholder="Libellé" value={label} onChange={(e) => setLabel(e.target.value)} />
           <input
             aria-label="Montant HT"
             inputMode="decimal"
-            className="field num h-9 py-1 text-right text-[14px]"
+            className="field num h-9 py-1 text-right text-[0.875rem]"
             placeholder={kind === 'variante' ? '−5 000' : '+3 000'}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -794,7 +794,7 @@ function PastePricesDialog({
       }
     >
       <div className="grid gap-4">
-        <p className="text-[14px] text-ink-2">Copiez la colonne des prix unitaires (ou des lignes entières), dans le même ordre que la DPGF. Les cellules vides restent non chiffrées.</p>
+        <p className="text-[0.875rem] text-ink-2">Copiez la colonne des prix unitaires (ou des lignes entières), dans le même ordre que la DPGF. Les cellules vides restent non chiffrées.</p>
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
           <Field label="À partir de la ligne" htmlFor="pp-start">
             <select id="pp-start" className="field" value={start} onChange={(e) => setStart(Number(e.target.value))}>
@@ -820,7 +820,7 @@ function PastePricesDialog({
         <textarea
           autoFocus
           rows={text ? 4 : 7}
-          className="field num resize-y text-[13.5px]"
+          className="field num resize-y text-[0.8438rem]"
           placeholder={'18 000\n3 500\n12,40\ninclus'}
           value={text}
           onChange={(e) => {
@@ -831,7 +831,7 @@ function PastePricesDialog({
         {rows.length > 0 && (
           <>
             <div className="scroll-x max-h-64 rounded-md border border-line">
-              <table className="w-full text-[13.5px]">
+              <table className="w-full text-[0.8438rem]">
                 <tbody>
                   {values.slice(0, 40).map((v, k) => {
                     const l = lines[start + k]
@@ -846,7 +846,7 @@ function PastePricesDialog({
                 </tbody>
               </table>
             </div>
-            <p className="text-[13.5px] text-ink-2">
+            <p className="text-[0.8438rem] text-ink-2">
               {filled} prix lus sur {rows.length} lignes.
               {overwrite > 0 && <span className="text-warn"> {overwrite} prix déjà saisis seront remplacés.</span>}
               {start + rows.length > lines.length && <span className="text-bad"> Le collage dépasse la fin de la DPGF.</span>}

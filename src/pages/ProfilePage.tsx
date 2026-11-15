@@ -45,10 +45,10 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto flex max-w-[720px] flex-col gap-5">
-      <Link to="/" className="inline-flex items-center gap-1 text-[14px] text-ink-2 hover:text-ink">
+      <Link to="/" className="inline-flex items-center gap-1 text-[0.875rem] text-ink-2 hover:text-ink">
         <ChevronLeft size={16} /> Accueil
       </Link>
-      <h1 className="font-title text-[34px] leading-none font-bold">Mon profil</h1>
+      <h1 className="font-title text-[2.125rem] leading-none font-bold">Mon profil</h1>
       <p className="text-ink-2">
         {profile.role === 'company'
           ? 'Ces informations accompagnent vos offres : l’acheteur voit votre logo à côté du nom de votre entreprise, et vos coordonnées pour vous joindre.'
@@ -59,7 +59,7 @@ export default function ProfilePage() {
         <CompanyLogo name={name} url={profile.logoUrl} size={88} />
         <div className="flex flex-col gap-2">
           <p className="font-semibold">Logo de l’entreprise</p>
-          <p className="text-[13.5px] text-ink-2">PNG, JPG ou WebP. Il est redimensionné automatiquement.</p>
+          <p className="text-[0.8438rem] text-ink-2">PNG, JPG ou WebP. Il est redimensionné automatiquement.</p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" icon={uploading ? <Spinner /> : <ImageUp size={15} />} disabled={uploading} onClick={() => fileRef.current?.click()}>
               {profile.logoUrl ? 'Changer le logo' : 'Ajouter un logo'}
@@ -118,13 +118,13 @@ export default function ProfilePage() {
         <Field label="Email" htmlFor="p-email" hint="L’email sert à vous connecter ; il ne se modifie pas ici.">
           <input id="p-email" className="field bg-paper" value={profile.email} readOnly />
         </Field>
-        {error && <p className="text-[14px] text-bad">{error}</p>}
+        {error && <p className="text-[0.875rem] text-bad">{error}</p>}
         <div className="flex items-center gap-3">
           <Button type="submit" variant="primary" disabled={busy}>
             {busy && <Spinner />} Enregistrer
           </Button>
           {saved && (
-            <span className="anim-pop inline-flex items-center gap-1 text-[14px] font-medium text-good">
+            <span className="anim-pop inline-flex items-center gap-1 text-[0.875rem] font-medium text-good">
               <Check size={16} /> Enregistré
             </span>
           )}

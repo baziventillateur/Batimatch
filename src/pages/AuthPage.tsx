@@ -43,7 +43,7 @@ export default function AuthPage() {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
       {/* Panneau de présentation */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden bg-ink p-10 text-white lg:flex">
+      <aside className="relative hidden flex-col justify-between overflow-hidden bg-night p-10 text-white lg:flex">
         <div className="flex items-center gap-2.5">
           <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
             <rect width="32" height="32" rx="6" fill="#F3F5F8" />
@@ -51,13 +51,13 @@ export default function AuthPage() {
             <rect x="13.5" y="13" width="5" height="13" fill="#1B2A3A" />
             <rect x="21" y="8" width="5" height="18" fill="#F8E04E" />
           </svg>
-          <span className="font-title text-[26px] font-bold">batimatch</span>
+          <span className="font-title text-[1.625rem] font-bold">Batimatch</span>
         </div>
         <div className="max-w-[30rem]">
-          <h1 className="font-title text-[46px] leading-[1.02] font-bold">
-            Vos consultations d’entreprises, de la DPGF au <span className="marker marker-strong anim-marker text-ink">bon choix</span>.
+          <h1 className="font-title text-[2.875rem] leading-[1.02] font-bold">
+            Vos consultations d’entreprises, de la DPGF au <span className="marker marker-strong anim-marker">bon choix</span>.
           </h1>
-          <ul className="mt-8 grid gap-4 text-[16px] text-white/85">
+          <ul className="mt-8 grid gap-4 text-[1rem] text-white/85">
             <li>L’acheteur publie ses lots avec une date de rendu et partage un code projet.</li>
             <li>Les entreprises répondent en ligne, prix unitaires, variantes et options.</li>
             <li>Le comparatif et l’aide à la décision se construisent tout seuls.</li>
@@ -71,17 +71,17 @@ export default function AuthPage() {
         <div className="w-full max-w-[440px]">
           <div className="mb-6 flex items-center gap-2.5 lg:hidden">
             <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
-              <rect width="32" height="32" rx="6" fill="#1B2A3A" />
-              <rect x="6" y="19" width="5" height="7" fill="#F3F5F8" />
-              <rect x="13.5" y="13" width="5" height="13" fill="#F3F5F8" />
+              <rect width="32" height="32" rx="6" fill="var(--color-ink)" />
+              <rect x="6" y="19" width="5" height="7" fill="var(--color-sheet)" />
+              <rect x="13.5" y="13" width="5" height="13" fill="var(--color-sheet)" />
               <rect x="21" y="8" width="5" height="18" fill="#F8E04E" />
             </svg>
-            <span className="font-title text-[23px] font-bold">batimatch</span>
+            <span className="font-title text-[1.4375rem] font-bold">Batimatch</span>
           </div>
-          <p className="-mt-3 mb-6 text-[15px] text-ink-2 lg:hidden">Vos consultations d’entreprises, de la DPGF au bon choix.</p>
+          <p className="-mt-3 mb-6 text-[0.9375rem] text-ink-2 lg:hidden">Vos consultations d’entreprises, de la DPGF au bon choix.</p>
 
           {code && (
-            <p className="mb-5 rounded-md border border-plan/25 bg-plan-soft px-4 py-3 text-[14.5px]">
+            <p className="mb-5 rounded-md border border-plan/25 bg-plan-soft px-4 py-3 text-[0.9062rem]">
               Vous avez été invité sur un projet (code <strong className="num tracking-wider">{code}</strong>). Créez votre compte entreprise ou
               connectez-vous pour y accéder.
             </p>
@@ -90,7 +90,7 @@ export default function AuthPage() {
           {mode === 'sent' || mode === 'reset-sent' ? (
             <div className="anim-pop flex flex-col items-start gap-4">
               <MailCheck size={40} className="text-plan" />
-              <h2 className="font-title text-[32px] leading-tight font-bold">Vérifiez votre boîte mail</h2>
+              <h2 className="font-title text-[2rem] leading-tight font-bold">Vérifiez votre boîte mail</h2>
               <p className="text-ink-2">
                 {mode === 'sent'
                   ? `Un lien de confirmation a été envoyé à ${form.email}. Cliquez dessus, puis revenez vous connecter.`
@@ -101,7 +101,7 @@ export default function AuthPage() {
           ) : (
             <>
               <div className="mb-6">
-                <h2 className="font-title text-[34px] leading-tight font-bold">
+                <h2 className="font-title text-[2.125rem] leading-tight font-bold">
                   {mode === 'login' ? 'Connexion' : mode === 'signup' ? 'Créer un compte' : 'Mot de passe oublié'}
                 </h2>
                 {mode !== 'reset' && (
@@ -117,7 +117,7 @@ export default function AuthPage() {
               <form onSubmit={submit} className="grid gap-4">
                 {mode === 'signup' && (
                   <fieldset className="grid grid-cols-2 gap-2.5">
-                    <legend className="mb-2 text-[13.5px] font-medium text-ink-2">Vous êtes</legend>
+                    <legend className="mb-2 text-[0.8438rem] font-medium text-ink-2">Vous êtes</legend>
                     {(
                       [
                         { v: 'buyer', icon: <HardHat size={22} />, t: 'Acheteur', d: 'Je lance des consultations' },
@@ -134,7 +134,7 @@ export default function AuthPage() {
                         <input type="radio" name="role" value={o.v} checked={role === o.v} onChange={() => setRole(o.v)} className="sr-only" />
                         <span className={cx('transition-transform', role === o.v && 'scale-110 text-plan')}>{o.icon}</span>
                         <span className="font-semibold">{o.t}</span>
-                        <span className="text-[13px] leading-snug text-ink-2">{o.d}</span>
+                        <span className="text-[0.8125rem] leading-snug text-ink-2">{o.d}</span>
                       </label>
                     ))}
                   </fieldset>
@@ -178,7 +178,7 @@ export default function AuthPage() {
                 )}
 
                 {error && (
-                  <p className="anim-shake rounded-md bg-bad-soft px-3 py-2 text-[14px] text-bad" role="alert">
+                  <p className="anim-shake rounded-md bg-bad-soft px-3 py-2 text-[0.875rem] text-bad" role="alert">
                     {error}
                   </p>
                 )}
@@ -188,12 +188,12 @@ export default function AuthPage() {
                   {mode === 'login' ? 'Se connecter' : mode === 'signup' ? 'Créer mon compte' : 'Recevoir le lien'}
                 </Button>
                 {mode === 'login' && (
-                  <button type="button" className="justify-self-start text-[14px] text-ink-2 hover:text-ink" onClick={() => (setMode('reset'), setError(null))}>
+                  <button type="button" className="justify-self-start text-[0.875rem] text-ink-2 hover:text-ink" onClick={() => (setMode('reset'), setError(null))}>
                     Mot de passe oublié ?
                   </button>
                 )}
                 {mode === 'reset' && (
-                  <button type="button" className="justify-self-start text-[14px] text-ink-2 hover:text-ink" onClick={() => setMode('login')}>
+                  <button type="button" className="justify-self-start text-[0.875rem] text-ink-2 hover:text-ink" onClick={() => setMode('login')}>
                     Revenir à la connexion
                   </button>
                 )}
@@ -229,7 +229,7 @@ function CompleteProfile() {
   const [busy, setBusy] = useState(false)
   return (
     <main className="mx-auto flex min-h-dvh max-w-[440px] flex-col justify-center gap-5 px-4">
-      <h1 className="font-title text-[32px] font-bold">Complétez votre profil</h1>
+      <h1 className="font-title text-[2rem] font-bold">Complétez votre profil</h1>
       <form
         className="grid gap-3"
         onSubmit={async (e) => {
@@ -260,7 +260,7 @@ function CompleteProfile() {
         <input className="field" placeholder="Nom" required value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
         <input className="field" placeholder="Entreprise" required value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
         <input className="field" placeholder="Téléphone" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        {error && <p className="text-[14px] text-bad">{error}</p>}
+        {error && <p className="text-[0.875rem] text-bad">{error}</p>}
         <Button type="submit" variant="primary" disabled={busy}>
           Enregistrer
         </Button>

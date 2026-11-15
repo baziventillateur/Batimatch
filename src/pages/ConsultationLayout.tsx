@@ -19,7 +19,7 @@ export function SaveIndicator() {
   if (status === 'idle') return null
   if (status === 'error') {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[13px] text-bad" role="alert">
+      <span className="inline-flex items-center gap-1.5 text-[0.8125rem] text-bad" role="alert">
         <AlertTriangle size={14} /> {error}
         {retry && (
           <button type="button" className="font-medium underline" onClick={retry}>
@@ -30,7 +30,7 @@ export function SaveIndicator() {
     )
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-3" role="status">
+    <span className="inline-flex items-center gap-1.5 text-[0.8125rem] text-ink-3" role="status">
       {status === 'saving' ? (
         <>
           <span className="anim-breathe size-2 rounded-full bg-plan" /> Enregistrement…
@@ -90,29 +90,29 @@ export default function ConsultationLayout() {
   if (isSynthese) return <Outlet context={c} />
 
   const tabs = [
-    { to: 'dpgf', n: 1, label: 'DPGF', count: meta.lines ? `${meta.lines} ligne${meta.lines > 1 ? 's' : ''}` : 'à saisir' },
-    { to: 'offres', n: 2, label: 'Offres', count: c.offers.length ? `${meta.companies} entreprise${meta.companies > 1 ? 's' : ''}` : 'aucune' },
-    { to: 'comparatif', n: 3, label: 'Comparatif', count: meta.companies >= 2 ? 'prêt' : 'dès 2 offres' },
-    { to: 'decision', n: 4, label: 'Décision', count: c.awardedOfferId ? 'offre retenue' : meta.companies >= 2 ? 'à arbitrer' : 'dès 2 offres' },
+    { to: 'dpgf', n: 1, done: meta.lines > 0, label: 'DPGF', count: meta.lines ? `${meta.lines} ligne${meta.lines > 1 ? 's' : ''}` : 'à saisir' },
+    { to: 'offres', n: 2, done: c.offers.length > 0, label: 'Offres', count: c.offers.length ? `${meta.companies} entreprise${meta.companies > 1 ? 's' : ''}` : 'aucune' },
+    { to: 'comparatif', n: 3, done: meta.companies >= 2, label: 'Comparatif', count: meta.companies >= 2 ? 'prêt' : 'dès 2 offres' },
+    { to: 'decision', n: 4, done: !!c.awardedOfferId, label: 'Décision', count: c.awardedOfferId ? 'offre retenue' : meta.companies >= 2 ? 'à arbitrer' : 'dès 2 offres' },
   ]
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-3 sm:gap-5">
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <Link to={`/p/${pid}`} className="inline-flex items-center gap-1 text-[14px] text-ink-2 hover:text-ink">
+        <Link to={`/p/${pid}`} className="inline-flex items-center gap-1 text-[0.875rem] text-ink-2 hover:text-ink">
           <ChevronLeft size={16} /> {c.affaire || 'Projet'}
         </Link>
         <SaveIndicator />
       </div>
 
       <section className="cartouche" aria-label="Informations du lot">
-        <div className="flex items-start justify-between gap-3 border-b border-ink/25 px-4 py-3 sm:px-5">
+        <div className="flex items-start justify-between gap-3 border-b border-ink/25 px-3 py-2 sm:px-5 sm:py-3">
           <div className="min-w-0">
-            <h1 className="font-title text-[30px] leading-[1.05] font-bold sm:text-[36px]">{c.name || 'Lot sans nom'}</h1>
-            <p className="mt-1 truncate text-[14.5px] text-ink-2">{c.affaire}</p>
+            <h1 className="font-title text-[1.5rem] leading-[1.05] font-bold sm:text-[2.25rem]">{c.name || 'Lot sans nom'}</h1>
+            <p className="mt-0.5 truncate text-[0.875rem] text-ink-2">{c.affaire}</p>
           </div>
           <div className="no-print flex shrink-0 items-center gap-1">
-            <Button size="sm" variant="ghost" icon={<Pencil size={15} />} onClick={() => setEditing(true)} className="hidden sm:inline-flex">
+            <Button size="sm" variant="ghost" icon={<Pencil size={15} />} onClick={() => setEditing(true)} className="max-sm:hidden">
               Modifier
             </Button>
             <Menu label="Actions sur le lot" icon={<MoreHorizontal size={18} />}>
@@ -158,7 +158,7 @@ export default function ConsultationLayout() {
             <dd className="num font-medium">
               {fmtDate(c.dueDate)}
               {meta.days != null && meta.status !== 'awarded' && (
-                <span className={cx('ml-2 text-[13px] font-normal', meta.days >= 0 && meta.days <= 3 ? 'text-warn' : 'text-ink-3')}>
+                <span className={cx('ml-2 text-[0.8125rem] font-normal', meta.days >= 0 && meta.days <= 3 ? 'text-warn' : 'text-ink-3')}>
                   {meta.days > 0 ? `J−${meta.days}` : meta.days === 0 ? 'ce soir' : 'clôturé'}
                 </span>
               )}
@@ -175,24 +175,29 @@ export default function ConsultationLayout() {
         </dl>
       </section>
 
-      <nav aria-label="Étapes" className="no-print -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <nav aria-label="Étapes" className="no-print -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
         <ol className="flex min-w-max gap-1 border-b border-line">
           {tabs.map((t) => (
             <li key={t.to}>
               <NavLink
                 to={t.to}
                 className={({ isActive }) =>
-                  cx('-mb-px flex items-center gap-2.5 border-b-[3px] px-3 py-2.5 sm:px-4', isActive ? 'border-ink text-ink' : 'border-transparent text-ink-2 hover:text-ink')
+                  cx('-mb-px flex items-center gap-2 border-b-[3px] px-2.5 py-2 sm:px-4', isActive ? 'border-ink text-ink' : 'border-transparent text-ink-2 hover:text-ink')
                 }
               >
                 {({ isActive }) => (
                   <>
-                    <span className={cx('num flex size-6 items-center justify-center rounded-full text-[13px] font-semibold transition-colors', isActive ? 'bg-ink text-white' : 'border border-ink-3 text-ink-2')}>
-                      {t.n}
+                    <span
+                      className={cx(
+                        'num flex size-5 items-center justify-center rounded-full text-[0.75rem] font-semibold transition-colors',
+                        isActive ? 'bg-ink text-sheet' : t.done ? 'bg-good-soft text-good' : 'border border-ink-3 text-ink-2',
+                      )}
+                    >
+                      {t.done && !isActive ? <Check key="ok" size={12} strokeWidth={3} className="anim-pop" /> : t.n}
                     </span>
                     <span className="flex flex-col leading-tight">
                       <span className="font-semibold">{t.label}</span>
-                      <span className="text-[12.5px] text-ink-3">{t.count}</span>
+                      <span className="text-[0.7812rem] text-ink-3">{t.count}</span>
                     </span>
                   </>
                 )}

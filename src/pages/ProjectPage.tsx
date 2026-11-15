@@ -45,15 +45,15 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <Link to="/" className="no-print inline-flex items-center gap-1 text-[14px] text-ink-2 hover:text-ink">
+      <Link to="/" className="no-print inline-flex items-center gap-1 text-[0.875rem] text-ink-2 hover:text-ink">
         <ChevronLeft size={16} /> Mes projets
       </Link>
 
       <section className="cartouche" aria-label="Projet">
         <div className="flex items-start justify-between gap-3 border-b border-ink/25 px-4 py-3 sm:px-5">
           <div className="min-w-0">
-            <h1 className="font-title text-[30px] leading-[1.05] font-bold sm:text-[36px]">{b.project.name}</h1>
-            <p className="mt-1 text-[14.5px] text-ink-2">{b.project.reference || 'Sans référence'}</p>
+            <h1 className="font-title text-[1.875rem] leading-[1.05] font-bold sm:text-[2.25rem]">{b.project.name}</h1>
+            <p className="mt-1 text-[0.9062rem] text-ink-2">{b.project.reference || 'Sans référence'}</p>
           </div>
           <Menu label="Actions sur le projet" icon={<MoreHorizontal size={18} />}>
             {(close) => (
@@ -84,15 +84,15 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
         <dl className="grid grid-cols-3">
           <div className="cartouche-cell border-r">
             <dt className="cartouche-label">Lots</dt>
-            <dd className="num text-[20px] font-semibold">{b.lots.length}</dd>
+            <dd className="num text-[1.25rem] font-semibold">{b.lots.length}</dd>
           </div>
           <div className="cartouche-cell border-r">
             <dt className="cartouche-label">Entreprises inscrites</dt>
-            <dd className="num text-[20px] font-semibold">{b.members.length}</dd>
+            <dd className="num text-[1.25rem] font-semibold">{b.members.length}</dd>
           </div>
           <div className="cartouche-cell">
             <dt className="cartouche-label">Offres reçues</dt>
-            <dd className="num text-[20px] font-semibold">{submitted.length}</dd>
+            <dd className="num text-[1.25rem] font-semibold">{submitted.length}</dd>
           </div>
         </dl>
       </section>
@@ -101,7 +101,7 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
 
       <section className="flex flex-col gap-3" aria-labelledby="lots-title">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="lots-title" className="font-title text-[26px] font-semibold">
+          <h2 id="lots-title" className="font-title text-[1.625rem] font-semibold">
             Lots et demandes d’offre
           </h2>
           <Button variant="primary" icon={<Plus size={18} />} onClick={() => setAddingLot(true)}>
@@ -165,14 +165,14 @@ function LotRow({ b, lotId }: { b: ProjectBundle; lotId: string }) {
         className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 hover:bg-paper/60 sm:px-5 md:grid-cols-[minmax(0,1.6fr)_1fr_1.2fr_1.1fr]"
       >
         <span className="min-w-0">
-          <span className="block truncate text-[17px] font-semibold">{lot.name || 'Lot sans nom'}</span>
-          <span className="block truncate text-[13.5px] text-ink-3">
+          <span className="block truncate text-[1.0625rem] font-semibold">{lot.name || 'Lot sans nom'}</span>
+          <span className="block truncate text-[0.8438rem] text-ink-3">
             {[lot.code, `${lineItemsCount(lot.items)} lignes`].filter(Boolean).join(', ')}
           </span>
         </span>
-        <span className="text-right text-[14px] md:text-left">
+        <span className="text-right text-[0.875rem] md:text-left">
           <span className="num block">{fmtDate(lot.due_date)}</span>
-          <span className={cx('block text-[12.5px]', due.tone === 'warn' ? 'font-medium text-warn' : 'text-ink-3')}>{due.text}</span>
+          <span className={cx('block text-[0.7812rem]', due.tone === 'warn' ? 'font-medium text-warn' : 'text-ink-3')}>{due.text}</span>
         </span>
         <span className="flex items-center gap-2">
           <span className="flex -space-x-2">
@@ -180,15 +180,15 @@ function LotRow({ b, lotId }: { b: ProjectBundle; lotId: string }) {
               <CompanyLogo key={o.id} name={o.company_name || '?'} url={o.logo_url} size={28} className="ring-2 ring-sheet" />
             ))}
           </span>
-          <span className="text-[14px] text-ink-2">
+          <span className="text-[0.875rem] text-ink-2">
             <span className="num font-semibold text-ink">{offers.length}</span> offre{offers.length > 1 ? 's' : ''}
           </span>
         </span>
-        <span className="col-span-2 text-[14px] md:col-span-1 md:text-right">
+        <span className="col-span-2 text-[0.875rem] md:col-span-1 md:text-right">
           {best != null ? (
             <>
               <span className="num font-semibold">{fmtEur(best)}</span>
-              {budget ? <span className={cx('ml-2 text-[12.5px]', best > budget ? 'text-bad' : 'text-good')}>{fmtPctSigned(best / budget - 1)} budget</span> : null}
+              {budget ? <span className={cx('ml-2 text-[0.7812rem]', best > budget ? 'text-bad' : 'text-good')}>{fmtPctSigned(best / budget - 1)} budget</span> : null}
             </>
           ) : (
             <span className="text-ink-3">Aucun prix reçu</span>
@@ -216,7 +216,7 @@ function InvitePanel({ code, projectName }: { code: string; projectName: string 
     <section className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between" aria-label="Inviter les entreprises">
       <div className="flex flex-col gap-1">
         <h2 className="font-semibold">Inviter les entreprises</h2>
-        <p className="max-w-[52ch] text-[14px] text-ink-2">
+        <p className="max-w-[52ch] text-[0.875rem] text-ink-2">
           Transmettez ce code ou le lien d’invitation : l’entreprise crée son compte et accède aux lots de ce projet. Elle ne verra ni votre budget ni les autres offres.
         </p>
       </div>
@@ -224,7 +224,7 @@ function InvitePanel({ code, projectName }: { code: string; projectName: string 
         <button
           type="button"
           onClick={() => copy(code, 'code')}
-          className="num rounded-md border-2 border-ink bg-sheet px-4 py-1.5 text-[30px] leading-tight font-semibold tracking-[0.3em] transition-transform active:scale-95"
+          className="num rounded-md border-2 border-ink bg-sheet px-4 py-1.5 text-[1.875rem] leading-tight font-semibold tracking-[0.3em] transition-transform active:scale-95"
           title="Copier le code"
         >
           {code}
@@ -242,7 +242,7 @@ function InvitePanel({ code, projectName }: { code: string; projectName: string 
             </Button>
           )}
         </div>
-        {copied === 'code' && <span className="anim-pop text-[13px] font-medium text-good">Code copié</span>}
+        {copied === 'code' && <span className="anim-pop text-[0.8125rem] font-medium text-good">Code copié</span>}
       </div>
     </section>
   )
@@ -252,14 +252,14 @@ function Members({ b, reload }: { b: ProjectBundle; reload: () => void }) {
   if (!b.members.length) {
     return (
       <section className="flex flex-col gap-3">
-        <h2 className="font-title text-[26px] font-semibold">Entreprises inscrites</h2>
+        <h2 className="font-title text-[1.625rem] font-semibold">Entreprises inscrites</h2>
         <p className="panel px-5 py-4 text-ink-2">Aucune entreprise n’a encore rejoint le projet. Partagez le code ci-dessus.</p>
       </section>
     )
   }
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="font-title text-[26px] font-semibold">Entreprises inscrites</h2>
+      <h2 className="font-title text-[1.625rem] font-semibold">Entreprises inscrites</h2>
       <ul className="panel overflow-hidden">
         {b.members.map((m) => {
           const p = m.profile
@@ -270,7 +270,7 @@ function Members({ b, reload }: { b: ProjectBundle; reload: () => void }) {
               <CompanyLogo name={name} url={p?.logo_url} size={40} />
               <div className="min-w-0">
                 <p className="truncate font-semibold">{name}</p>
-                <p className="flex flex-wrap gap-x-4 gap-y-0.5 text-[13.5px] text-ink-2">
+                <p className="flex flex-wrap gap-x-4 gap-y-0.5 text-[0.8438rem] text-ink-2">
                   <span>{[p?.first_name, p?.last_name].filter(Boolean).join(' ')}</span>
                   {p?.email && (
                     <a href={`mailto:${p.email}`} className="inline-flex items-center gap-1 text-plan hover:underline">
@@ -283,7 +283,7 @@ function Members({ b, reload }: { b: ProjectBundle; reload: () => void }) {
                     </a>
                   )}
                 </p>
-                <p className="text-[12.5px] text-ink-3">
+                <p className="text-[0.7812rem] text-ink-3">
                   Inscrite le {fmtDate(m.joined_at.slice(0, 10))}, {sent} offre{sent > 1 ? 's' : ''} envoyée{sent > 1 ? 's' : ''}
                 </p>
               </div>
@@ -370,7 +370,7 @@ function LotFormBody({ onClose, projectId, position, onCreated }: { onClose: () 
       <Field label="Budget objectif HT" htmlFor="l-budget" hint="Visible de vous seul : il sert de référence dans le comparatif.">
         <NumberInput id="l-budget" suffix="€" value={f.budget} onCommit={(v) => setF({ ...f, budget: v })} />
       </Field>
-      {error && <p className="text-[14px] text-bad">{error}</p>}
+      {error && <p className="text-[0.875rem] text-bad">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
           Annuler
@@ -391,25 +391,25 @@ function CompanyProject({ b }: { b: ProjectBundle }) {
   const ownerName = owner?.company_name || [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') || 'L’acheteur'
   return (
     <div className="flex flex-col gap-5">
-      <Link to="/" className="inline-flex items-center gap-1 text-[14px] text-ink-2 hover:text-ink">
+      <Link to="/" className="inline-flex items-center gap-1 text-[0.875rem] text-ink-2 hover:text-ink">
         <ChevronLeft size={16} /> Mes consultations
       </Link>
       <section className="cartouche">
         <div className="flex items-center gap-4 border-b border-ink/25 px-4 py-4 sm:px-5">
           <CompanyLogo name={ownerName} url={owner?.logo_url} size={52} />
           <div className="min-w-0">
-            <h1 className="font-title text-[30px] leading-[1.05] font-bold sm:text-[36px]">{b.project.name}</h1>
-            <p className="text-[14.5px] text-ink-2">
+            <h1 className="font-title text-[1.875rem] leading-[1.05] font-bold sm:text-[2.25rem]">{b.project.name}</h1>
+            <p className="text-[0.9062rem] text-ink-2">
               Consultation lancée par <span className="font-medium text-ink">{ownerName}</span>
               {b.project.reference && <>, affaire {b.project.reference}</>}
             </p>
           </div>
         </div>
         {(b.project.description || owner) && (
-          <div className="grid gap-3 px-4 py-3 text-[14.5px] sm:grid-cols-[1fr_auto] sm:px-5">
+          <div className="grid gap-3 px-4 py-3 text-[0.9062rem] sm:grid-cols-[1fr_auto] sm:px-5">
             <p className="whitespace-pre-line text-ink-2">{b.project.description || 'Pas de présentation.'}</p>
             {owner && (
-              <p className="flex flex-col gap-0.5 text-[13.5px] sm:text-right">
+              <p className="flex flex-col gap-0.5 text-[0.8438rem] sm:text-right">
                 <span>{[owner.first_name, owner.last_name].filter(Boolean).join(' ')}</span>
                 {owner.email && (
                   <a className="text-plan hover:underline" href={`mailto:${owner.email}`}>
@@ -427,7 +427,7 @@ function CompanyProject({ b }: { b: ProjectBundle }) {
         )}
       </section>
 
-      <h2 className="font-title text-[26px] font-semibold">Lots à chiffrer</h2>
+      <h2 className="font-title text-[1.625rem] font-semibold">Lots à chiffrer</h2>
       {b.lots.length === 0 ? (
         <EmptyState title="Pas encore de lot publié">L’acheteur n’a pas encore mis de DPGF en ligne sur ce projet. Revenez un peu plus tard.</EmptyState>
       ) : (
@@ -443,16 +443,16 @@ function CompanyProject({ b }: { b: ProjectBundle }) {
                 <Link to={`/p/${b.project.id}/l/${lot.id}`} className="panel group flex h-full flex-col gap-3 p-5 hover:border-ink-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="text-[18px] font-semibold">{lot.name}</h3>
-                      <p className="text-[13.5px] text-ink-3">{[lot.code, `${lineItemsCount(lot.items)} lignes`].filter(Boolean).join(', ')}</p>
+                      <h3 className="text-[1.125rem] font-semibold">{lot.name}</h3>
+                      <p className="text-[0.8438rem] text-ink-3">{[lot.code, `${lineItemsCount(lot.items)} lignes`].filter(Boolean).join(', ')}</p>
                     </div>
                     <StatusPill status={status} />
                   </div>
-                  <p className="text-[14px]">
+                  <p className="text-[0.875rem]">
                     Remise le <span className="num font-medium">{fmtDate(lot.due_date)}</span>{' '}
                     <span className={cx(due.tone === 'warn' ? 'font-medium text-warn' : 'text-ink-3')}>({due.text})</span>
                   </p>
-                  <span className="mt-auto text-[14px] font-medium text-plan">
+                  <span className="mt-auto text-[0.875rem] font-medium text-plan">
                     {closed ? 'Voir mon offre' : status === 'sent' ? 'Modifier mon offre' : status === 'draft' ? 'Continuer ma réponse' : 'Répondre'}
                   </span>
                 </Link>
@@ -471,5 +471,5 @@ export function StatusPill({ status }: { status: 'none' | 'draft' | 'sent' }) {
     draft: ['Brouillon', 'bg-warn-soft text-warn'],
     sent: ['Offre envoyée', 'bg-good-soft text-good'],
   }[status]
-  return <span className={cx('shrink-0 rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold', s[1])}>{s[0]}</span>
+  return <span className={cx('shrink-0 rounded-[3px] px-1.5 py-0.5 text-[0.75rem] font-semibold', s[1])}>{s[0]}</span>
 }

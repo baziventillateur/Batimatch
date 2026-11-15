@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#ffffff" />
     <meta name="description" content="Batimatch : créez un DPGF, saisissez les offres des entreprises et comparez-les pour décider." />
+    <script>
+      try {
+        var t = localStorage.getItem('batimatch:theme')
+        if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
     <title>Batimatch · Comparatif d'offres BTP</title>
   </head>
   <body>

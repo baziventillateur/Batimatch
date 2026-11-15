@@ -9,7 +9,7 @@ const S3 = 'var(--color-s3)'
 
 function LegendKey({ color, children }: { color: string; children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-2">
+    <span className="inline-flex items-center gap-1.5 text-[0.8125rem] text-ink-2">
       <span className="h-2.5 w-3.5 rounded-[2px]" style={{ background: color }} />
       {children}
     </span>
@@ -46,14 +46,14 @@ export function RankingChart({ a, awardedId }: { a: Analysis; awardedId: string 
             const awarded = awardedId === r.offer.id
             return (
               <li key={r.offer.id} className="grid gap-1">
-                <div className="flex items-baseline justify-between gap-3 text-[14.5px]">
+                <div className="flex items-baseline justify-between gap-3 text-[0.9062rem]">
                   <span className={cx('min-w-0 truncate', isBest && 'font-semibold')}>
                     <span className="num mr-2 text-ink-3">{r.rank}</span>
                     {r.label}
-                    {awarded && <span className="ml-2 text-[12.5px] font-semibold text-good">Retenue</span>}
+                    {awarded && <span className="ml-2 text-[0.7812rem] font-semibold text-good">Retenue</span>}
                   </span>
                   <span className="flex shrink-0 items-baseline gap-2">
-                    {!isBest && <span className="num text-[13px] text-ink-3">{fmtPctSigned(r.vsBest)}</span>}
+                    {!isBest && <span className="num text-[0.8125rem] text-ink-3">{fmtPctSigned(r.vsBest)}</span>}
                     <span className={cx('num font-semibold', isBest && 'marker')}>{fmtEur(r.total)}</span>
                   </span>
                 </div>
@@ -91,7 +91,7 @@ export function RankingChart({ a, awardedId }: { a: Analysis; awardedId: string 
         </ol>
       </div>
       {a.budget && (
-        <figcaption className="flex items-center gap-2 text-[13px] text-ink-2">
+        <figcaption className="flex items-center gap-2 text-[0.8125rem] text-ink-2">
           <span className="h-3.5 w-[2px] bg-ink" aria-hidden="true" /> Budget objectif : <span className="num">{fmtEur(a.budget)}</span>
         </figcaption>
       )}
@@ -106,7 +106,7 @@ function TipRows({ title, rows }: { title: string; rows: [string, number][] }) {
       <p className="mb-1 font-semibold">{title}</p>
       {rows.map(([l, v]) => (
         <p key={l} className="flex justify-between gap-4">
-          <span className="text-white/75">{l}</span>
+          <span className="text-sheet/75">{l}</span>
           <strong className="num">{fmtEur(v)}</strong>
         </p>
       ))}
@@ -142,7 +142,7 @@ export function ParetoList({ a, limit = 10 }: { a: Analysis; limit?: number }) {
               i < a.paretoCount80 ? '' : 'text-ink-2',
             )}
           >
-            <span className="min-w-0 truncate text-[14px]">
+            <span className="min-w-0 truncate text-[0.875rem]">
               <span className="num mr-1.5 text-ink-3">{p.item.ref}</span>
               {p.item.label}
             </span>
@@ -152,7 +152,7 @@ export function ParetoList({ a, limit = 10 }: { a: Analysis; limit?: number }) {
                 style={{ width: `${(p.share / maxShare) * 100}%`, background: S1, opacity: i < a.paretoCount80 ? 1 : 0.45 }}
               />
             </span>
-            <span className="num text-right text-[14px]">{fmtPct(p.share)}</span>
+            <span className="num text-right text-[0.875rem]">{fmtPct(p.share)}</span>
           </li>
         ))}
       </ol>
@@ -197,13 +197,13 @@ export function VersionChart({ histories, colorOf }: { histories: CompanyHistory
         {ticks.map((t) => (
           <g key={t}>
             <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} stroke="var(--color-line-2)" strokeWidth={1} />
-            <text x={pad.l - 8} y={y(t)} textAnchor="end" dominantBaseline="middle" className="num fill-ink-3 text-[12px]">
+            <text x={pad.l - 8} y={y(t)} textAnchor="end" dominantBaseline="middle" className="num fill-ink-3 text-[0.75rem]">
               {fmtEurCompact(t)}
             </text>
           </g>
         ))}
         {Array.from({ length: maxV }, (_, i) => i + 1).map((v) => (
-          <text key={v} x={x(v)} y={H - 10} textAnchor="middle" className="num fill-ink-2 text-[13px]">
+          <text key={v} x={x(v)} y={H - 10} textAnchor="middle" className="num fill-ink-2 text-[0.8125rem]">
             V{v}
           </text>
         ))}
@@ -241,7 +241,7 @@ export function VersionChart({ histories, colorOf }: { histories: CompanyHistory
                   className="cursor-default outline-none"
                 />
               ))}
-              <text x={x(last.version) + 12} y={y(last.total)} dominantBaseline="middle" className="text-[12.5px]">
+              <text x={x(last.version) + 12} y={y(last.total)} dominantBaseline="middle" className="text-[0.7812rem]">
                 <tspan className="fill-ink font-semibold">{h.company.length > 18 ? h.company.slice(0, 17) + '…' : h.company}</tspan>
                 <tspan x={x(last.version) + 12} dy="1.25em" className="num fill-ink-2">
                   {h.gain >= 0 ? '−' : '+'}

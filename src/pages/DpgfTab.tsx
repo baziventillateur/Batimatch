@@ -19,7 +19,7 @@ import { UNITS, guessDpgfColumns, rowsToItems, splitClipboard, type ColumnRole }
 import { exportBlankDpgf } from '../lib/io'
 import { fmtEur } from '../lib/format'
 import type { DpgfItem } from '../lib/types'
-import { Button, Dialog, EmptyState, Menu, MenuItem, NumberInput, Segmented, Toggle, cx } from '../components/ui'
+import { AnimatedNumber, Button, Dialog, EmptyState, Menu, MenuItem, NumberInput, Segmented, Toggle, cx } from '../components/ui'
 
 /** Propose le numéro suivant : « 2.3 » → « 2.4 », « PSE 1 » → « PSE 2 » */
 function nextRef(prev: string | undefined, kind: DpgfItem['kind'], items: DpgfItem[]): string {
@@ -64,6 +64,7 @@ export default function DpgfTab() {
   const updateConsultation = useStore((s) => s.updateConsultation)
   const [pasting, setPasting] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [addedId, setAddedId] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const lineCount = useMemo(() => linesOf(c.items).length, [c.items])
@@ -108,6 +109,7 @@ export default function DpgfTab() {
     })
     insertItems(c.id, [it], after?.id ?? null)
     setFocusId(it.id)
+    setAddedId(it.id)
   }
 
   const remove = (it: DpgfItem) => {
@@ -152,9 +154,9 @@ export default function DpgfTab() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[14px] text-ink-2">
+    <div className="flex flex-col gap-3 sm:gap-4">
+      <div className="no-print flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[0.875rem] text-ink-2">
           <span className="num font-semibold text-ink">{lineCount}</span> ligne{lineCount > 1 ? 's' : ''}
           {pseCount > 0 && (
             <>
@@ -177,11 +179,12 @@ export default function DpgfTab() {
       </div>
 
       <div ref={listRef} className="panel overflow-hidden">
-        <div className="hidden grid-cols-[5rem_minmax(0,1fr)_6.5rem_7.5rem_8.5rem_2.5rem] gap-2 border-b border-line bg-paper/70 px-3 py-2 text-[13px] text-ink-3 md:grid">
+        <div className="hidden grid-cols-[4.5rem_minmax(0,1fr)_5.5rem_6.5rem_11rem_8rem_2.5rem] gap-2 border-b border-line bg-paper/70 px-3 py-2 text-[0.8125rem] text-ink-3 md:grid">
           <span className="pl-2">N°</span>
           <span className="pl-2">Désignation</span>
           <span className="pl-2">Unité</span>
           <span className="pr-2 text-right">Quantité</span>
+          <span className="pr-2" title="Visible de vous seul">PU budget HT</span>
           <span className="pl-1">Type</span>
           <span />
         </div>
@@ -195,8 +198,9 @@ export default function DpgfTab() {
             <li
               key={it.id}
               className={cx(
-                'grid grid-cols-[3.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 gap-y-1 border-b border-line-2 px-2 py-1.5 last:border-0 md:grid-cols-[5rem_minmax(0,1fr)_6.5rem_7.5rem_8.5rem_2.5rem] md:px-3',
-                it.kind === 'chapter' && 'bg-paper/80 py-2',
+                'grid grid-cols-[3rem_minmax(0,1fr)_2rem] items-center gap-x-1.5 gap-y-0 border-b border-line-2 px-1.5 py-1 last:border-0 md:gap-x-2 md:grid-cols-[4.5rem_minmax(0,1fr)_5.5rem_6.5rem_11rem_8rem_2.5rem] md:px-3',
+                it.kind === 'chapter' && 'bg-paper/80',
+                it.id === addedId && 'anim-pop',
               )}
             >
               <input
@@ -209,18 +213,18 @@ export default function DpgfTab() {
                 aria-label={it.kind === 'chapter' ? 'Titre du chapitre' : 'Désignation'}
                 data-label={it.id}
                 data-cell={`${idx}-label`}
-                className={cx('field-bare min-w-0', it.kind === 'chapter' && 'font-title text-[18px] font-semibold', it.kind === 'chapter' && 'md:col-span-4')}
+                className={cx('field-bare min-w-0', it.kind === 'chapter' && 'font-title text-[1.0625rem] font-semibold', it.kind === 'chapter' && 'md:col-span-5')}
                 placeholder={it.kind === 'chapter' ? 'Titre du chapitre' : 'Désignation de l’ouvrage'}
                 value={it.label}
                 onChange={(e) => updateItem(c.id, it.id, { label: e.target.value })}
                 onKeyDown={(e) => onEnter(e, idx, 'label')}
               />
               {it.kind === 'line' && (
-                <div className="col-start-2 row-start-2 flex flex-wrap items-center gap-x-2 gap-y-2 md:contents">
+                <div className="col-span-full row-start-2 flex items-center gap-1.5 md:contents">
                   <input
                     aria-label="Unité"
                     list="units"
-                    className="field-bare w-14 min-w-0 md:w-full"
+                    className="field-bare w-14 min-w-0 text-ink-2 md:w-full md:text-ink"
                     value={it.unit}
                     onChange={(e) => updateItem(c.id, it.id, { unit: e.target.value })}
                   />
@@ -228,28 +232,28 @@ export default function DpgfTab() {
                     bare
                     aria-label="Quantité"
                     data-cell={`${idx}-qty`}
-                    className={cx('w-20 shrink-0 text-right md:w-full', it.qty == null && 'bg-warn-soft/60')}
+                    className={cx('w-16 shrink-0 text-right md:w-full', it.qty == null && 'bg-warn-soft/60')}
                     placeholder="Qté"
                     value={it.qty}
                     onCommit={(v) => updateItem(c.id, it.id, { qty: v })}
                     onKeyDown={(e) => onEnter(e, idx, 'qty')}
                   />
-                  <div className="flex shrink-0 items-center gap-1.5 md:w-full" title="Visible de vous seul, jamais par les entreprises">
+                  <div className="flex min-w-0 shrink-0 items-center gap-1.5 md:w-full" title="Visible de vous seul, jamais par les entreprises">
                     <NumberInput
                       bare
                       aria-label="Prix unitaire budget"
                       data-cell={`${idx}-pu`}
-                      className="w-20 text-right text-ink-3 md:w-full"
+                      className="w-[4.75rem] shrink-0 text-right md:w-24"
                       placeholder="PU budget"
                       value={c.budgetPrices[it.id] ?? null}
                       onCommit={(v) => setBudgetPrice(it.id, v)}
                       onKeyDown={(e) => onEnter(e, idx, 'pu')}
                     />
                     {c.budgetPrices[it.id] != null && it.qty != null && (
-                      <span className="num whitespace-nowrap text-[13px] text-ink-3">= {fmtEur(c.budgetPrices[it.id] * it.qty)}</span>
+                      <span className="num hidden truncate text-[0.8125rem] text-ink-3 md:inline">= {fmtEur(c.budgetPrices[it.id] * it.qty)}</span>
                     )}
                   </div>
-                  <div className="shrink-0">
+                  <div className="ml-auto shrink-0 md:ml-0">
                     <Segmented
                       size="sm"
                       label="Type de ligne"
@@ -305,27 +309,29 @@ export default function DpgfTab() {
           <Button size="sm" variant="ghost" icon={<Heading size={15} />} onClick={() => add('chapter')}>
             Chapitre
           </Button>
-          <span className="ml-auto hidden self-center text-[12.5px] text-ink-3 sm:block">Entrée : ligne suivante</span>
+          <span className="ml-auto hidden self-center text-[0.7812rem] text-ink-3 sm:block">Entrée : ligne suivante</span>
         </div>
       </div>
 
       {budgetTotal.priced > 0 && (
         <div className="no-print flex flex-wrap items-baseline justify-between gap-2 rounded-md border border-line bg-paper/50 px-4 py-3">
-          <p className="text-[14px] text-ink-2">
+          <p className="text-[0.875rem] text-ink-2">
             Budget estimé HT <span className="text-ink-3">(visible de vous seul, {budgetTotal.priced} ligne{budgetTotal.priced > 1 ? 's' : ''} chiffrée{budgetTotal.priced > 1 ? 's' : ''})</span>
           </p>
-          <span className="num text-[18px] font-semibold text-ink">{fmtEur(budgetTotal.total)}</span>
+          <span className="num text-[1.125rem] font-semibold text-ink">
+            <AnimatedNumber value={budgetTotal.total} format={fmtEur} duration={450} />
+          </span>
         </div>
       )}
 
       {lineCount > 0 && (
         <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-md border border-plan/25 bg-plan-soft/60 px-4 py-3">
-          <p className="text-[14.5px]">
+          <p className="text-[0.9062rem]">
             {c.offers.length
               ? 'Le DPGF est à jour dans toutes les offres.'
               : 'DPGF prêt ? Envoyez-le aux entreprises, puis saisissez leurs prix.'}
           </p>
-          <Link to="../offres" relative="path" className="inline-flex h-9 items-center rounded-[5px] bg-plan px-3.5 font-medium text-white hover:bg-plan-dark">
+          <Link to="../offres" relative="path" className="inline-flex h-9 items-center rounded-[5px] bg-plan px-3.5 font-medium text-sheet hover:bg-plan-dark">
             {c.offers.length ? 'Voir les offres' : 'Saisir les offres'}
           </Link>
         </div>
@@ -398,13 +404,13 @@ function PasteDpgfDialog({
       }
     >
       <div className="grid gap-4">
-        <p className="text-[14px] text-ink-2">
+        <p className="text-[0.875rem] text-ink-2">
           Dans Excel, sélectionnez les colonnes N°, désignation, unité et quantité (sans les prix), copiez, puis collez ici.
         </p>
         <textarea
           autoFocus
           rows={text ? 4 : 7}
-          className="field num resize-y text-[13.5px]"
+          className="field num resize-y text-[0.8438rem]"
           placeholder={'1\tTerrassements\n1.1\tDéblais en masse\tm3\t1850\n1.2\tRemblai GNT 0/31,5\tm3\t640'}
           value={text}
           onChange={(e) => {
@@ -430,14 +436,14 @@ function PasteDpgfDialog({
               )}
             </div>
             <div className="scroll-x rounded-md border border-line">
-              <table className="w-full text-[13.5px]">
+              <table className="w-full text-[0.8438rem]">
                 <thead className="bg-paper">
                   <tr>
                     {activeRoles.map((r, i) => (
                       <th key={i} className="p-1.5 text-left font-normal">
                         <select
                           aria-label={`Colonne ${i + 1}`}
-                          className="field py-1 text-[13px]"
+                          className="field py-1 text-[0.8125rem]"
                           value={r}
                           onChange={(e) => {
                             const next = [...activeRoles]
@@ -471,7 +477,7 @@ function PasteDpgfDialog({
                 </tbody>
               </table>
             </div>
-            <p className="text-[13.5px] text-ink-2">
+            <p className="text-[0.8438rem] text-ink-2">
               <span className="num font-semibold text-ink">{items.filter((i) => i.kind === 'line').length}</span> lignes et{' '}
               <span className="num font-semibold text-ink">{items.filter((i) => i.kind === 'chapter').length}</span> chapitres
               détectés{rows.length > 8 ? ` (aperçu des 8 premières lignes sur ${rows.length})` : ''}.

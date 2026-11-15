@@ -29,7 +29,7 @@ export default function SynthesePage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <Link to="../decision" relative="path" className="inline-flex items-center gap-1 text-[14px] text-ink-2 hover:text-ink">
+        <Link to="../decision" relative="path" className="inline-flex items-center gap-1 text-[0.875rem] text-ink-2 hover:text-ink">
           <ChevronLeft size={16} /> Retour à la décision
         </Link>
         <Button variant="primary" icon={<Printer size={16} />} onClick={() => window.print()}>
@@ -40,11 +40,11 @@ export default function SynthesePage() {
       <article className="mx-auto w-full max-w-[900px] bg-sheet p-6 shadow-[0_1px_3px_rgb(27_42_58/0.12)] sm:p-10 print:p-0 print:shadow-none">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-ink pb-4">
           <div>
-            <p className="text-[13px] text-ink-3">Note de synthèse, choix de l’entreprise</p>
-            <h1 className="font-title text-[34px] leading-tight font-bold">{c.name}</h1>
+            <p className="text-[0.8125rem] text-ink-3">Note de synthèse, choix de l’entreprise</p>
+            <h1 className="font-title text-[2.125rem] leading-tight font-bold">{c.name}</h1>
             <p className="text-ink-2">{[c.affaire, c.lot].filter(Boolean).join(', ')}</p>
           </div>
-          <div className="flex items-center gap-3 text-right text-[13.5px]">
+          <div className="flex items-center gap-3 text-right text-[0.8438rem]">
             <div>
               <p className="font-semibold">{profile?.companyName}</p>
               <p className="text-ink-2">{author}</p>
@@ -58,11 +58,11 @@ export default function SynthesePage() {
           <section className="mt-6 grid gap-4 rounded-md border-2 border-ink p-5 sm:grid-cols-[auto_1fr]">
             <CompanyLogo name={reco.result.offer.company || '?'} url={reco.result.offer.logoUrl} size={64} />
             <div>
-              <p className="text-[13px] text-ink-3">{awarded ? 'Entreprise retenue' : 'Entreprise proposée'}</p>
-              <h2 className="font-title text-[28px] leading-tight font-bold">
+              <p className="text-[0.8125rem] text-ink-3">{awarded ? 'Entreprise retenue' : 'Entreprise proposée'}</p>
+              <h2 className="font-title text-[1.75rem] leading-tight font-bold">
                 <span className="marker marker-strong">{reco.result.label}</span>
               </h2>
-              <p className="mt-1 text-[15px]">
+              <p className="mt-1 text-[0.9375rem]">
                 <strong className="num">{fmtEur(reco.result.total)} HT</strong>
                 {reco.global != null && (
                   <>
@@ -76,7 +76,7 @@ export default function SynthesePage() {
                 )}
                 .
               </p>
-              <ul className="mt-2 grid gap-0.5 text-[14px]">
+              <ul className="mt-2 grid gap-0.5 text-[0.875rem]">
                 {strengthsAndWeaknesses(a, reco.result).plus.slice(0, 4).map((t) => (
                   <li key={t}>+ {t}</li>
                 ))}
@@ -86,11 +86,11 @@ export default function SynthesePage() {
         )}
 
         <section className="mt-7">
-          <h3 className="mb-2 font-title text-[20px] font-semibold">Classement des offres</h3>
+          <h3 className="mb-2 font-title text-[1.25rem] font-semibold">Classement des offres</h3>
           <div className="scroll-x">
-            <table className="w-full min-w-[620px] border-collapse text-[13.5px]">
+            <table className="w-full min-w-[620px] border-collapse text-[0.8438rem]">
               <thead>
-                <tr className="border-b-2 border-ink text-left text-[12.5px] text-ink-2">
+                <tr className="border-b-2 border-ink text-left text-[0.7812rem] text-ink-2">
                   <th className="py-1.5 pr-2 font-normal">Rang</th>
                   <th className="py-1.5 pr-2 font-normal">Entreprise</th>
                   <th className="py-1.5 pr-2 text-right font-normal">Montant comparé HT</th>
@@ -133,12 +133,12 @@ export default function SynthesePage() {
         </section>
 
         <section className="mt-7 break-inside-avoid">
-          <h3 className="mb-3 font-title text-[20px] font-semibold">Montants comparés</h3>
+          <h3 className="mb-3 font-title text-[1.25rem] font-semibold">Montants comparés</h3>
           <RankingChart a={a} awardedId={c.awardedOfferId} />
         </section>
 
         <section className="mt-7">
-          <h3 className="mb-3 font-title text-[20px] font-semibold">Analyse par entreprise</h3>
+          <h3 className="mb-3 font-title text-[1.25rem] font-semibold">Analyse par entreprise</h3>
           <div className="grid gap-4">
             {scored.map((s) => {
               const sw = strengthsAndWeaknesses(a, s.result)
@@ -148,9 +148,9 @@ export default function SynthesePage() {
                   <p className="flex items-center gap-2 font-semibold">
                     <CompanyLogo name={s.result.offer.company || '?'} url={s.result.offer.logoUrl} size={26} />
                     {s.result.label}
-                    <span className="num ml-auto text-[14px] font-normal text-ink-2">{fmtEur(s.result.total)}</span>
+                    <span className="num ml-auto text-[0.875rem] font-normal text-ink-2">{fmtEur(s.result.total)}</span>
                   </p>
-                  <div className="mt-2 grid gap-3 text-[13.5px] sm:grid-cols-2">
+                  <div className="mt-2 grid gap-3 text-[0.8438rem] sm:grid-cols-2">
                     <ul className="grid gap-0.5">
                       {sw.plus.map((t) => (
                         <li key={t} className="text-good">
@@ -166,9 +166,9 @@ export default function SynthesePage() {
                       ))}
                     </ul>
                   </div>
-                  {s.result.offer.reserves && <p className="mt-2 text-[13px] text-ink-2">Réserves : {s.result.offer.reserves}</p>}
+                  {s.result.offer.reserves && <p className="mt-2 text-[0.8125rem] text-ink-2">Réserves : {s.result.offer.reserves}</p>}
                   {cms.length > 0 && (
-                    <div className="mt-2 border-t border-line-2 pt-2 text-[13.5px]">
+                    <div className="mt-2 border-t border-line-2 pt-2 text-[0.8438rem]">
                       {cms.map((cm) => (
                         <p key={cm.id} className="text-ink-2">
                           « {cm.body} »
@@ -184,8 +184,8 @@ export default function SynthesePage() {
 
         {a.insights.length > 0 && (
           <section className="mt-7 break-inside-avoid">
-            <h3 className="mb-2 font-title text-[20px] font-semibold">Points de vigilance</h3>
-            <ul className="grid gap-1 text-[13.5px]">
+            <h3 className="mb-2 font-title text-[1.25rem] font-semibold">Points de vigilance</h3>
+            <ul className="grid gap-1 text-[0.8438rem]">
               {a.insights
                 .filter((i) => i.level !== 'good')
                 .slice(0, 8)
@@ -196,7 +196,7 @@ export default function SynthesePage() {
           </section>
         )}
 
-        <footer className="mt-10 grid grid-cols-2 gap-6 border-t-2 border-ink pt-4 text-[13.5px]">
+        <footer className="mt-10 grid grid-cols-2 gap-6 border-t-2 border-ink pt-4 text-[0.8438rem]">
           <div>
             <p className="text-ink-3">Établi par</p>
             <p className="font-medium">{author || '…'}</p>

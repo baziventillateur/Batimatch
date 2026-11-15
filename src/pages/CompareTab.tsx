@@ -24,7 +24,7 @@ export default function CompareTab() {
       <EmptyState
         title={c.offers.length ? 'Encore une offre et le comparatif s’affiche' : 'Le comparatif attend les offres'}
         action={
-          <Link to="../offres" relative="path" className="inline-flex h-10 items-center rounded-[5px] bg-plan px-3.5 font-medium text-white hover:bg-plan-dark">
+          <Link to="../offres" relative="path" className="inline-flex h-10 items-center rounded-[5px] bg-plan px-3.5 font-medium text-sheet hover:bg-plan-dark">
             {c.offers.length ? 'Ajouter une offre' : 'Saisir les offres'}
           </Link>
         }
@@ -43,15 +43,15 @@ export default function CompareTab() {
       {/* Verdict */}
       <section className="panel grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10" aria-label="Classement">
         <div className="flex flex-col gap-3">
-          <p className="text-[14px] text-ink-2">{awarded ? 'Offre retenue' : 'Moins-disant après remise à niveau'}</p>
-          <h2 className="font-title text-[34px] leading-[1.05] font-bold sm:text-[44px]">
+          <p className="text-[0.875rem] text-ink-2">{awarded ? 'Offre retenue' : 'Moins-disant après remise à niveau'}</p>
+          <h2 className="font-title text-[2.125rem] leading-[1.05] font-bold sm:text-[2.75rem]">
             <span className="marker marker-strong">{(awarded ?? a.best)!.label}</span>
           </h2>
-          <p className="num text-[30px] leading-none font-semibold sm:text-[34px]">
-            {fmtEur((awarded ?? a.best)!.total)} <span className="text-[16px] font-normal text-ink-2">HT</span>
+          <p className="num text-[1.875rem] leading-none font-semibold sm:text-[2.125rem]">
+            {fmtEur((awarded ?? a.best)!.total)} <span className="text-[1rem] font-normal text-ink-2">HT</span>
           </p>
           <Verdict a={a} awarded={awarded} />
-          <Link to="../decision" relative="path" className="no-print mt-2 inline-flex w-fit items-center gap-2 rounded-[5px] bg-plan px-3.5 py-2 font-medium text-white hover:bg-plan-dark">
+          <Link to="../decision" relative="path" className="no-print mt-2 inline-flex w-fit items-center gap-2 rounded-[5px] bg-plan px-3.5 py-2 font-medium text-sheet hover:bg-plan-dark">
             <Trophy size={16} /> {awarded ? 'Voir la décision' : 'Passer à la décision'}
           </Link>
         </div>
@@ -139,7 +139,7 @@ function SettingsBar({ c, a, onChange }: { c: Consultation; a: Analysis; onChang
     <section className="no-print panel flex flex-col gap-4 p-4" aria-label="Réglages du comparatif">
       <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
         <div className="grid gap-1.5">
-          <span className="text-[13px] text-ink-2">Compléter les lignes non chiffrées au</span>
+          <span className="text-[0.8125rem] text-ink-2">Compléter les lignes non chiffrées au</span>
           <Segmented<FillMode>
             size="sm"
             label="Remise à niveau des lignes non chiffrées"
@@ -154,7 +154,7 @@ function SettingsBar({ c, a, onChange }: { c: Consultation; a: Analysis; onChang
         </div>
         {hasVersions && (
           <div className="grid gap-1.5">
-            <span className="text-[13px] text-ink-2">Versions</span>
+            <span className="text-[0.8125rem] text-ink-2">Versions</span>
             <Segmented
               size="sm"
               label="Versions comparées"
@@ -178,13 +178,13 @@ function SettingsBar({ c, a, onChange }: { c: Consultation; a: Analysis; onChang
       </div>
       {a.pseLines.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line-2 pt-3">
-          <span className="text-[13px] text-ink-2">PSE intégrées au comparatif</span>
+          <span className="text-[0.8125rem] text-ink-2">PSE intégrées au comparatif</span>
           {a.pseLines.map((it) => (
             <Toggle
               key={it.id}
               checked={!!s.pseRetained[it.id]}
               onChange={(v) => onChange({ pseRetained: { ...s.pseRetained, [it.id]: v } })}
-              label={<span className="text-[14px]">{[it.ref, it.label].filter(Boolean).join(' ')}</span>}
+              label={<span className="text-[0.875rem]">{[it.ref, it.label].filter(Boolean).join(' ')}</span>}
             />
           ))}
         </div>
@@ -238,7 +238,7 @@ function Verdict({ a, awarded }: { a: Analysis; awarded?: OfferResult }) {
     )
   }
   return (
-    <div className="flex max-w-[52ch] flex-col gap-1.5 text-[15.5px] text-ink-2">
+    <div className="flex max-w-[52ch] flex-col gap-1.5 text-[0.9688rem] text-ink-2">
       {parts.map((p, i) => (
         <p key={i}>{p}</p>
       ))}
@@ -252,8 +252,8 @@ function Section({ title, subtitle, children, flush }: { title: string; subtitle
   return (
     <section className="panel flex min-w-0 flex-col">
       <header className="px-4 pt-4 pb-3 sm:px-5">
-        <h3 className="font-title text-[22px] leading-tight font-semibold">{title}</h3>
-        {subtitle && <p className="mt-0.5 max-w-[80ch] text-[13.5px] text-ink-2">{subtitle}</p>}
+        <h3 className="font-title text-[1.375rem] leading-tight font-semibold">{title}</h3>
+        {subtitle && <p className="mt-0.5 max-w-[80ch] text-[0.8438rem] text-ink-2">{subtitle}</p>}
       </header>
       <div className={cx('min-w-0', flush ? '' : 'px-4 pb-4 sm:px-5 sm:pb-5')}>{children}</div>
     </section>
@@ -264,10 +264,10 @@ function Kpi({ label, value, detail, tone }: { label: string; value: string; det
   return (
     <div className="flex flex-col gap-0.5 bg-sheet px-4 py-3.5">
       <span className="cartouche-label">{label}</span>
-      <span className={cx('num text-[26px] leading-tight font-semibold', tone === 'good' && 'text-good', tone === 'bad' && 'text-bad', tone === 'warn' && 'text-warn')}>
+      <span className={cx('num text-[1.625rem] leading-tight font-semibold', tone === 'good' && 'text-good', tone === 'bad' && 'text-bad', tone === 'warn' && 'text-warn')}>
         {value}
       </span>
-      {detail && <span className="text-[12.5px] leading-snug text-ink-3">{detail}</span>}
+      {detail && <span className="text-[0.7812rem] leading-snug text-ink-3">{detail}</span>}
     </div>
   )
 }
@@ -289,7 +289,7 @@ function Insights({ items }: { items: Insight[] }) {
     <div className="flex flex-col gap-2">
       <ul className="flex flex-col">
         {shown.map((it, i) => (
-          <li key={i} className="grid grid-cols-[1.25rem_1fr] gap-2.5 border-b border-line-2 py-2 text-[14.5px] leading-snug last:border-0">
+          <li key={i} className="grid grid-cols-[1.25rem_1fr] gap-2.5 border-b border-line-2 py-2 text-[0.9062rem] leading-snug last:border-0">
             <span className="pt-0.5">{INSIGHT_ICON[it.level]}</span>
             <span>{it.text}</span>
           </li>
@@ -363,7 +363,7 @@ function SummaryTable({ c, a, colorOf }: { c: Consultation; a: Analysis; colorOf
       wrap: true,
       render: (r) =>
         r.offer.reserves.trim() ? (
-          <span className="line-clamp-3 text-left text-[13px] whitespace-normal text-ink-2" title={r.offer.reserves}>
+          <span className="line-clamp-3 text-left text-[0.8125rem] whitespace-normal text-ink-2" title={r.offer.reserves}>
             {r.offer.reserves}
           </span>
         ) : (
@@ -373,15 +373,15 @@ function SummaryTable({ c, a, colorOf }: { c: Consultation; a: Analysis; colorOf
   ]
   return (
     <div className="scroll-x border-t border-line">
-      <table className="w-full min-w-[640px] border-collapse text-[14px]">
+      <table className="w-full min-w-[640px] border-collapse text-[0.875rem]">
         <thead>
-          <tr className="border-b border-line bg-paper/70 text-[13px] text-ink-2">
+          <tr className="border-b border-line bg-paper/70 text-[0.8125rem] text-ink-2">
             <th className="sticky left-0 z-10 bg-paper px-4 py-2 text-left font-normal sm:px-5">Rang</th>
             {cols.map((r) => (
               <th key={r.offer.id} className="min-w-[150px] px-3 py-2 text-right font-normal">
-                <span className="num block text-[12px] text-ink-3">{r.rank}</span>
+                <span className="num block text-[0.75rem] text-ink-3">{r.rank}</span>
                 <CompanyHead r={r} color={colorOf(r.offer.company)} />
-                <Link to={`../offres/${r.offer.id}`} relative="path" className="no-print text-[12px] text-plan hover:underline">
+                <Link to={`../offres/${r.offer.id}`} relative="path" className="no-print text-[0.75rem] text-plan hover:underline">
                   Ouvrir l’offre
                 </Link>
               </th>
@@ -400,7 +400,7 @@ function SummaryTable({ c, a, colorOf }: { c: Consultation; a: Analysis; colorOf
                   className={cx(
                     'num px-3 py-2 text-right',
                     row.wrap ? 'max-w-[240px] align-top' : 'whitespace-nowrap',
-                    row.strong && 'text-[16px] font-semibold',
+                    row.strong && 'text-[1rem] font-semibold',
                   )}
                 >
                   {row.render(r)}
@@ -411,7 +411,7 @@ function SummaryTable({ c, a, colorOf }: { c: Consultation; a: Analysis; colorOf
         </tbody>
       </table>
       {c.settings.fillMode !== 'none' && a.ranked.some((r) => r.fill) && (
-        <p className="px-4 py-2.5 text-[12.5px] text-ink-3 sm:px-5">
+        <p className="px-4 py-2.5 text-[0.7812rem] text-ink-3 sm:px-5">
           Remise à niveau : chaque ligne non chiffrée est complétée au prix {c.settings.fillMode === 'max' ? 'le plus haut' : 'médian'} des autres
           offres, pour comparer des périmètres identiques.
         </p>
@@ -428,9 +428,9 @@ function ChapterTable({ a, colorOf, c }: { a: Analysis; colorOf: (n: string) => 
   return (
     <div className="border-t border-line">
       <div className="scroll-x">
-        <table className="w-full min-w-[620px] border-collapse text-[14px]">
+        <table className="w-full min-w-[620px] border-collapse text-[0.875rem]">
           <thead>
-            <tr className="border-b border-line bg-paper/70 text-[13px] text-ink-2">
+            <tr className="border-b border-line bg-paper/70 text-[0.8125rem] text-ink-2">
               <th className="sticky left-0 z-10 bg-paper px-4 py-2 text-left font-normal sm:px-5">Chapitre</th>
               {cols.map((r) => (
                 <th key={r.offer.id} className="min-w-[130px] px-3 py-2 text-right font-normal">
@@ -486,7 +486,7 @@ function ChapterTable({ a, colorOf, c }: { a: Analysis; colorOf: (n: string) => 
           </tbody>
         </table>
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 text-[12.5px] text-ink-2 sm:px-5" aria-label="Légende des écarts">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 text-[0.7812rem] text-ink-2 sm:px-5" aria-label="Légende des écarts">
         <span>Écart à la médiane</span>
         {DIVERGING.map((s) => (
           <span key={s.label} className="inline-flex items-center gap-1">
@@ -548,9 +548,9 @@ function LineTable({ a, c, colorOf }: { a: Analysis; c: Consultation; colorOf: (
         <Toggle checked={showAmounts} onChange={setShowAmounts} label="Montants au lieu des PU" />
       </div>
       <div className="scroll-x max-h-[70vh] overflow-y-auto border-t border-line-2">
-        <table className="w-full min-w-[720px] border-collapse text-[14px]">
+        <table className="w-full min-w-[720px] border-collapse text-[0.875rem]">
           <thead className="sticky top-0 z-20">
-            <tr className="border-b border-line bg-paper text-[13px] text-ink-2">
+            <tr className="border-b border-line bg-paper text-[0.8125rem] text-ink-2">
               <th className="sticky left-0 z-20 min-w-[220px] bg-paper px-4 py-2 text-left font-normal sm:px-5">Désignation</th>
               <th className="px-2 py-2 text-right font-normal">Qté</th>
               <th className="px-3 py-2 text-right font-normal">{showAmounts ? 'Montant médian' : 'PU médian'}</th>
@@ -572,7 +572,7 @@ function LineTable({ a, c, colorOf }: { a: Analysis; c: Consultation; colorOf: (
             {visible.map((row) =>
               row.kind === 'chapter' ? (
                 <tr key={row.id} className="bg-paper/70">
-                  <th colSpan={3 + cols.length} scope="rowgroup" className="sticky left-0 px-4 py-1.5 text-left font-title text-[16px] font-semibold sm:px-5">
+                  <th colSpan={3 + cols.length} scope="rowgroup" className="sticky left-0 px-4 py-1.5 text-left font-title text-[1rem] font-semibold sm:px-5">
                     {row.label}
                   </th>
                 </tr>
@@ -595,7 +595,7 @@ function LineRow({ l, order, showAmounts }: { l: LineStat; order: number[]; show
         <span className="line-clamp-2 leading-snug">
           <span className="num mr-1.5 text-ink-3">{l.item.ref}</span>
           {l.item.label}
-          {l.item.scope === 'option' && <span className="ml-1.5 rounded-[3px] bg-plan-soft px-1 text-[11px] font-semibold text-plan-dark">PSE</span>}
+          {l.item.scope === 'option' && <span className="ml-1.5 rounded-[3px] bg-plan-soft px-1 text-[0.6875rem] font-semibold text-plan-dark">PSE</span>}
         </span>
       </th>
       <td className="num px-2 py-1.5 text-right whitespace-nowrap text-ink-2">
@@ -610,16 +610,16 @@ function LineRow({ l, order, showAmounts }: { l: LineStat; order: number[]; show
         return (
           <td key={cell.offerId} className="num px-3 py-1.5 text-right whitespace-nowrap">
             {cell.flag === 'missing' ? (
-              <span className="text-[13px] text-warn italic">non chiffré</span>
+              <span className="text-[0.8125rem] text-warn italic">non chiffré</span>
             ) : cell.flag === 'included' ? (
-              <span className="text-[13px] text-good italic">inclus</span>
+              <span className="text-[0.8125rem] text-good italic">inclus</span>
             ) : (
               <span className="inline-flex flex-col items-end leading-tight">
                 <span className={cx(cell.isMin && 'marker font-semibold')}>
                   {showAmounts ? fmtEur(cell.amount) : fmtNum(cell.price as number)}
                 </span>
                 {strong && (
-                  <span className={cx('text-[11.5px] font-medium', cell.flag === 'high' ? 'text-bad' : 'text-plan-dark')}>
+                  <span className={cx('text-[0.7188rem] font-medium', cell.flag === 'high' ? 'text-bad' : 'text-plan-dark')}>
                     {cell.flag === 'high' ? '▲' : '▼'} {fmtPctSigned(cell.deviation)}
                   </span>
                 )}

@@ -54,13 +54,13 @@ export default function AdminPage() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <header>
-        <h1 className="font-title text-[26px] font-bold">Panneau admin</h1>
-        <p className="mt-1 text-[14px] text-ink-3">Liens utiles pour le projet Batimatch.</p>
+        <h1 className="font-title text-[1.625rem] font-bold">Panneau admin</h1>
+        <p className="mt-1 text-[0.875rem] text-ink-3">Liens utiles pour le projet Batimatch.</p>
       </header>
 
       {GROUPS.map((g) => (
         <section key={g.title} className="overflow-hidden rounded-md border border-line bg-sheet">
-          <h2 className="border-b border-line bg-paper/60 px-4 py-2.5 text-[14px] font-semibold">{g.title}</h2>
+          <h2 className="border-b border-line bg-paper/60 px-4 py-2.5 text-[0.875rem] font-semibold">{g.title}</h2>
           <ul>
             {g.items.map((it, i) => (
               <li key={it.href} className={cx(i > 0 && 'border-t border-line')}>
@@ -71,8 +71,8 @@ export default function AdminPage() {
                   className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-paper/60 focus-visible:bg-paper/60"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[15px] font-medium text-ink">{it.label}</span>
-                    {it.note && <span className="block text-[13px] text-ink-3">{it.note}</span>}
+                    <span className="block text-[0.9375rem] font-medium text-ink">{it.label}</span>
+                    {it.note && <span className="block text-[0.8125rem] text-ink-3">{it.note}</span>}
                   </span>
                   <ExternalLink size={16} className="shrink-0 text-ink-3" aria-hidden="true" />
                 </a>
@@ -82,8 +82,8 @@ export default function AdminPage() {
         </section>
       ))}
 
-      <section className="rounded-md border border-line bg-paper/50 px-4 py-3 text-[13px] text-ink-3">
-        <h2 className="mb-1 text-[14px] font-semibold text-ink">Projet local</h2>
+      <section className="rounded-md border border-line bg-paper/50 px-4 py-3 text-[0.8125rem] text-ink-3">
+        <h2 className="mb-1 text-[0.875rem] font-semibold text-ink">Projet local</h2>
         {LOCAL_NOTE}
       </section>
     </div>

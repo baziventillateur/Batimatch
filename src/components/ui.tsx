@@ -21,7 +21,7 @@ export const cx = (...xs: (string | false | null | undefined)[]) => xs.filter(Bo
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-plan text-white hover:bg-plan-dark border border-plan-dark/40',
+  primary: 'bg-plan text-sheet hover:bg-plan-dark border border-plan-dark/40',
   secondary: 'bg-sheet text-ink border border-line hover:border-ink-3',
   ghost: 'text-ink-2 hover:bg-ink/5 hover:text-ink border border-transparent',
   danger: 'bg-sheet text-bad border border-bad/30 hover:bg-bad-soft',
@@ -39,8 +39,8 @@ export function Button({
     <button
       type="button"
       className={cx(
-        'inline-flex items-center justify-center gap-2 rounded-[5px] font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-45',
-        size === 'sm' ? 'h-8 px-2.5 text-[13.5px]' : 'h-10 px-3.5 text-[15px]',
+        'inline-flex items-center justify-center gap-2 rounded-[5px] font-medium whitespace-nowrap transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45',
+        size === 'sm' ? 'h-8 px-2.5 text-[0.8438rem]' : 'h-10 px-3.5 text-[0.9375rem]',
         VARIANTS[variant],
         className,
       )}
@@ -64,7 +64,7 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={cx(
-        'inline-flex size-9 shrink-0 items-center justify-center rounded-[5px] text-ink-2 transition-colors hover:bg-ink/6 hover:text-ink disabled:opacity-35',
+        'inline-flex size-9 shrink-0 items-center justify-center rounded-[5px] text-ink-2 transition-[color,background-color,transform] duration-150 hover:bg-ink/6 hover:text-ink active:scale-90 disabled:opacity-35',
         className,
       )}
       {...rest}
@@ -120,11 +120,11 @@ export function Field({
 }) {
   return (
     <div className={cx('flex flex-col gap-1.5', className)}>
-      <label htmlFor={htmlFor} className="text-[13.5px] font-medium text-ink-2">
+      <label htmlFor={htmlFor} className="text-[0.8438rem] font-medium text-ink-2">
         {label}
       </label>
       {children}
-      {hint && <p className="text-[12.5px] leading-snug text-ink-3">{hint}</p>}
+      {hint && <p className="text-[0.7812rem] leading-snug text-ink-3">{hint}</p>}
     </div>
   )
 }
@@ -186,7 +186,7 @@ export function NumberInput({
         {...rest}
       />
       {suffix && (
-        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[13.5px] text-ink-3">
+        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[0.8438rem] text-ink-3">
           {suffix}
         </span>
       )}
@@ -220,7 +220,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           className={cx(
             'rounded-[4px] font-medium whitespace-nowrap transition-colors',
-            size === 'sm' ? 'px-2.5 py-1 text-[13px]' : 'px-3 py-1.5 text-[14px]',
+            size === 'sm' ? 'px-2.5 py-1 text-[0.8125rem]' : 'px-3 py-1.5 text-[0.875rem]',
             o.value === value ? 'bg-sheet text-ink shadow-[0_1px_2px_rgb(27_42_58/0.12)]' : 'text-ink-2 hover:text-ink',
           )}
         >
@@ -234,7 +234,7 @@ export function Segmented<T extends string>({
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
   const id = useId()
   return (
-    <label htmlFor={id} className="inline-flex cursor-pointer items-center gap-2.5 text-[14px] select-none">
+    <label htmlFor={id} className="inline-flex cursor-pointer items-center gap-2.5 text-[0.875rem] select-none">
       <span className="relative inline-flex">
         <input id={id} type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
         <span className="h-5 w-9 rounded-full bg-line transition-colors peer-checked:bg-plan peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-plan" />
@@ -288,7 +288,7 @@ export function Dialog({
       {open && (
         <div className="flex max-h-[92dvh] flex-col">
           <header className="flex items-center justify-between gap-4 border-b border-line-2 px-5 py-3.5">
-            <h2 className="font-title text-[22px] leading-tight font-semibold">{title}</h2>
+            <h2 className="font-title text-[1.375rem] leading-tight font-semibold">{title}</h2>
             <IconButton label="Fermer" onClick={onClose}>
               <X size={18} />
             </IconButton>
@@ -357,7 +357,7 @@ export function useTip() {
 export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="panel flex flex-col items-start gap-3 px-6 py-10 sm:items-center sm:text-center">
-      <h3 className="font-title text-[24px] font-semibold">{title}</h3>
+      <h3 className="font-title text-[1.5rem] font-semibold">{title}</h3>
       {children && <div className="max-w-[56ch] text-ink-2">{children}</div>}
       {action && <div className="mt-2 flex flex-wrap gap-2">{action}</div>}
     </div>
@@ -424,7 +424,7 @@ export function MenuItem({
       role="menuitem"
       onClick={onClick}
       className={cx(
-        'flex w-full items-center gap-2.5 px-3 py-2 text-left text-[14px] hover:bg-paper',
+        'flex w-full items-center gap-2.5 px-3 py-2 text-left text-[0.875rem] hover:bg-paper',
         danger ? 'text-bad' : 'text-ink',
       )}
     >
@@ -439,11 +439,11 @@ export function DeviationChip({ value, strong }: { value: number | null; strong?
   if (value == null || !isFinite(value)) return null
   const up = value > 0
   const pct = Math.round(Math.abs(value) * 100)
-  if (pct === 0) return <span className="num text-[12.5px] text-ink-3">= médiane</span>
+  if (pct === 0) return <span className="num text-[0.7812rem] text-ink-3">= médiane</span>
   return (
     <span
       className={cx(
-        'num inline-flex items-center gap-0.5 rounded-[3px] px-1 text-[12.5px] leading-[1.35] font-medium',
+        'num inline-flex items-center gap-0.5 rounded-[3px] px-1 text-[0.7812rem] leading-[1.35] font-medium',
         strong ? (up ? 'bg-bad-soft text-bad' : 'bg-plan-soft text-plan-dark') : 'text-ink-3',
       )}
       title={`${up ? 'Plus cher' : 'Moins cher'} que la médiane des autres offres`}
@@ -481,7 +481,7 @@ export function CompanyLogo({ name, url, size = 36, className }: { name: string;
   return (
     <span
       aria-hidden="true"
-      className={cx('inline-flex items-center justify-center rounded-[6px] font-title font-bold text-ink/80', className)}
+      className={cx('inline-flex items-center justify-center rounded-[6px] font-title font-bold text-night/80', className)}
       style={{ ...style, background: tint, fontSize: Math.max(11, size * 0.38) }}
     >
       {initials}
@@ -534,7 +534,7 @@ export function Loading({ label = 'Chargement' }: { label?: string }) {
 
 export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-bad/30 bg-bad-soft px-4 py-3 text-[14.5px] text-bad" role="alert">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-bad/30 bg-bad-soft px-4 py-3 text-[0.9062rem] text-bad" role="alert">
       <span>{message}</span>
       {onRetry && (
         <Button size="sm" onClick={onRetry}>
