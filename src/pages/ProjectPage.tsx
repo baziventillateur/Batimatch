@@ -637,36 +637,53 @@ function CompanyProject({ b, reload }: { b: ProjectBundle; reload: () => void })
             const closed = suspended || (days != null && days < 0)
             const due = dueLabel(days)
             const status = mine?.status === 'submitted' ? 'sent' : mine ? 'draft' : 'none'
+            const full = b.lots.find((l) => l.id === lot.id)
+            const lines = linesOf(full?.items ?? [])
+            const total = lines.length || lot.line_count
+            const priced = mine ? lines.filter((l) => mine.prices?.[l.item.id] !== undefined).length : 0
+            const access = lot.access
+            // Étape en cours : 0 accès, 1 chiffrage, 2 envoi, 3 tout est fait
+            const stage = !open ? 0 : status === 'sent' ? 3 : total > 0 && priced >= total ? 2 : 1
             const head = (
-              <>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-[1.125rem] font-semibold">{lot.name}</h3>
-                    <p className="text-[0.8438rem] text-ink-3">{[lot.code, `${lot.line_count} ligne${lot.line_count > 1 ? 's' : ''}`].filter(Boolean).join(', ')}</p>
-                  </div>
-                  {suspended ? <LotStatusPill status="suspended" /> : open ? <StatusPill status={status} /> : null}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-[1.125rem] font-semibold">{lot.name}</h3>
+                  <p className="text-[0.8438rem] text-ink-2">
+                    {[lot.code, open ? null : `${lot.line_count} ligne${lot.line_count > 1 ? 's' : ''}`, lot.due_date ? `remise le ${fmtDate(lot.due_date)}` : due.text]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </p>
                 </div>
-                <p className="text-[0.875rem]">
-                  Remise le <span className="num font-medium">{fmtDate(lot.due_date)}</span>{' '}
-                  <span className={cx(due.tone === 'warn' ? 'font-medium text-warn' : 'text-ink-3')}>({due.text})</span>
-                </p>
-              </>
+                {suspended ? <LotStatusPill status="suspended" /> : <DueChip days={days} sent={status === 'sent'} />}
+              </div>
             )
+            const steps =
+              access === 'refused' || access === 'declined' ? null : (
+                <LotSteps stage={stage} first={open ? 'Accès validé' : access === 'pending' ? 'Accès demandé' : 'Accès au lot'} />
+              )
             return (
               <li key={lot.id}>
                 {open ? (
-                  <div className="panel flex h-full flex-col gap-2.5 p-4 hover:border-ink-3">
-                    <Link to={`/p/${b.project.id}/l/${lot.id}`} className="group flex flex-1 flex-col gap-2.5">
-                      {head}
-                      <span className="mt-auto text-[0.875rem] font-medium text-plan">
-                        {closed ? 'Voir mon offre' : status === 'sent' ? 'Modifier mon offre' : status === 'draft' ? 'Continuer ma réponse' : 'Répondre'}
-                      </span>
-                    </Link>
-                    {!closed && status !== 'sent' && (
-                      <Button size="sm" variant="ghost" className="self-start" onClick={() => setDeclining(lot)}>
-                        Ne pas répondre
-                      </Button>
-                    )}
+                  <div className="panel flex h-full flex-col gap-3.5 p-4">
+                    {head}
+                    {steps}
+                    <PricingBar done={priced} total={total} />
+                    <div className="mt-auto flex flex-col gap-1">
+                      <Link
+                        to={`/p/${b.project.id}/l/${lot.id}`}
+                        className={cx(
+                          'inline-flex h-10 items-center justify-center rounded-[5px] border text-[0.9375rem] font-medium transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97]',
+                          closed || status === 'sent' ? 'border-line bg-sheet text-ink hover:border-ink-3' : 'border-plan-dark/40 bg-plan text-sheet hover:bg-plan-dark',
+                        )}
+                      >
+                        {closed ? 'Voir mon offre' : status === 'sent' ? 'Modifier mon offre' : priced > 0 || status === 'draft' ? 'Continuer ma réponse' : 'Répondre'}
+                      </Link>
+                      {!closed && status !== 'sent' && (
+                        <Button size="sm" variant="ghost" className="self-center" onClick={() => setDeclining(lot)}>
+                          Ne pas répondre
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ) : lot.access === 'declined' ? (
                   <div className="panel flex h-full flex-col gap-2.5 p-4">
@@ -688,8 +705,9 @@ function CompanyProject({ b, reload }: { b: ProjectBundle; reload: () => void })
                     </div>
                   </div>
                 ) : (
-                  <div className="panel flex h-full flex-col gap-2.5 p-4">
+                  <div className="panel flex h-full flex-col gap-3.5 p-4">
                     {head}
+                    {!suspended && steps}
                     <div className="mt-auto">
                       {lot.access === 'pending' ? (
                         <p key="pending" className="anim-pop inline-flex items-center gap-1.5 rounded-[4px] bg-warn-soft px-2 py-1 text-[0.8438rem] font-medium text-warn">
@@ -758,6 +776,69 @@ function CompanyProject({ b, reload }: { b: ProjectBundle; reload: () => void })
           />
         </label>
       </Dialog>
+    </div>
+  )
+}
+
+/** Compte à rebours avant la remise : neutre, orange à J−3, rouge la veille et le jour même */
+function DueChip({ days, sent }: { days: number | null; sent: boolean }) {
+  if (days == null) return null
+  if (days < 0) return <span className="shrink-0 rounded-[3px] bg-line-2 px-1.5 py-0.5 text-[0.75rem] font-semibold text-ink-2">Clôturé</span>
+  const tone = days <= 1 ? 'bg-bad-soft text-bad' : days <= 3 ? 'bg-warn-soft text-warn' : 'bg-line-2 text-ink-2'
+  return (
+    <span className={cx('flex shrink-0 flex-col items-center rounded-[5px] px-2.5 py-1.5 leading-none', tone)}>
+      <span className="num font-title text-[1.5rem] font-bold">{days === 0 ? 'Ce soir' : `J−${days}`}</span>
+      <span className="mt-0.5 text-[0.7188rem] font-semibold">{days === 0 ? 'dernier délai' : sent ? 'pour modifier' : 'pour répondre'}</span>
+    </span>
+  )
+}
+
+/** Frise du lot côté entreprise : accès, chiffrage, envoi. `stage` est l'étape en cours (3 = tout est fait). */
+function LotSteps({ stage, first }: { stage: number; first: string }) {
+  const labels = [first, 'Chiffrage', 'Offre envoyée']
+  return (
+    <ol className="grid grid-cols-3" aria-label="Étapes du lot">
+      {labels.map((label, i) => {
+        const done = i < stage
+        const current = i === stage
+        return (
+          <li key={i} className="relative flex flex-col items-center gap-1.5 text-center" aria-current={current ? 'step' : undefined}>
+            {i > 0 && <span aria-hidden="true" className={cx('absolute top-[0.625rem] right-1/2 left-[-50%] h-0.5 -translate-y-1/2', done || current ? 'bg-good' : 'bg-line')} />}
+            <span
+              key={done ? 'done' : 'todo'}
+              className={cx(
+                'relative z-10 flex size-5 items-center justify-center rounded-full border-2',
+                done ? 'anim-pop border-good bg-good text-sheet' : current ? 'border-plan bg-plan-soft' : 'border-line bg-sheet',
+              )}
+            >
+              {done && <Check size={12} strokeWidth={3.5} aria-hidden="true" />}
+            </span>
+            <span className={cx('text-[0.7812rem] leading-tight', done ? 'font-medium text-ink' : current ? 'font-semibold text-plan-dark' : 'text-ink-2')}>
+              {label}
+              {done && <span className="sr-only"> (fait)</span>}
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/** Avancement du chiffrage : postes chiffrés sur le total du lot */
+function PricingBar({ done, total }: { done: number; total: number }) {
+  if (!total) return null
+  const complete = done >= total
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="flex items-baseline justify-between gap-3 text-[0.875rem]">
+        <span>
+          <span className="num font-bold">{Math.min(done, total)}</span> poste{done > 1 ? 's' : ''} sur <span className="num">{total}</span> chiffré{done > 1 ? 's' : ''}
+        </span>
+        <span className={cx('text-[0.8125rem]', complete ? 'font-medium text-good' : 'text-ink-2')}>{complete ? 'complet' : `reste ${total - done}`}</span>
+      </p>
+      <div className="h-2 overflow-hidden rounded-full bg-line-2" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(done, total)} aria-label="Postes chiffrés">
+        <div className={cx('anim-grow h-full rounded-full', complete ? 'bg-good' : 'bg-plan')} style={{ width: `${Math.min(100, (done / total) * 100)}%` }} />
+      </div>
     </div>
   )
 }

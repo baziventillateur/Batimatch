@@ -266,6 +266,15 @@
     transform: rotate(-90deg) scale(0.6);
   }
 }
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+.anim-grow {
+  transform-origin: left;
+  animation: grow-x 0.7s 0.1s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
 .anim-fade {
   animation: fade-in 0.22s ease-out both;
 }
