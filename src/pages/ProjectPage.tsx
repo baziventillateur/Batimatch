@@ -116,7 +116,7 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
             Créez un lot par corps d’état : sa DPGF, sa date de rendu et son budget objectif (que les entreprises ne voient pas). Un lot reste invisible tant que vous ne le publiez pas.
           </EmptyState>
         ) : (
-          <ul className="panel overflow-hidden">
+          <ul className="panel">
             {b.lots.map((lot) => (
               <LotRow key={lot.id} b={b} lotId={lot.id} reload={reload} />
             ))}
@@ -300,7 +300,7 @@ function AccessRequests({ b, reload }: { b: ProjectBundle; reload: () => void })
         Demandes d’accès
         {pending > 0 && <span className="num anim-pop rounded-full bg-warn px-2 py-0.5 font-sans text-[0.8125rem] font-semibold text-sheet">{pending}</span>}
       </h2>
-      <ul className="panel overflow-hidden">
+      <ul className="panel">
         {rows.map((r) => {
           const p = b.members.find((m) => m.user_id === r.user_id)?.profile
           const lot = b.lots.find((l) => l.id === r.lot_id)
@@ -425,7 +425,7 @@ function Members({ b, reload }: { b: ProjectBundle; reload: () => void }) {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="font-title text-[1.625rem] font-semibold">Entreprises inscrites</h2>
-      <ul className="panel overflow-hidden">
+      <ul className="panel">
         {b.members.map((m) => {
           const p = m.profile
           const sent = b.offers.filter((o) => o.company_id === m.user_id && o.status === 'submitted').length
