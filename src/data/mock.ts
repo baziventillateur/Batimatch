@@ -1,10 +1,13 @@
 // Backend de démonstration en mémoire (stocké dans le navigateur), qui reproduit
 // les règles d'accès de la base Supabase. Sert au développement et aux tests visuels.
-import type { Backend, OfferLite } from './backend'
+import type { SignUpInput, Backend, OfferLite } from './backend'
 import type { CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 import { uid } from '../lib/id'
 
 const files = new Map<string, Blob>()
+/** En démo aucun email ne part : le code de connexion est toujours le même */
+export const DEMO_CODE = '123456'
+const pendingSignups = new Map<string, Omit<SignUpInput, 'email' | 'password'>>()
 
 interface Db {
   users: { id: string; email: string; password: string }[]
@@ -102,6 +105,29 @@ export function createMockBackend(): Backend {
       db.session = u.id
       save()
       listeners.forEach((l) => l(u.id))
+      await delay(null)
+    },
+    async requestCode(email, signup) {
+      const known = db.users.some((u) => u.email.toLowerCase() === email.toLowerCase())
+      if (!known && !signup) throw new Error('Signups not allowed for otp')
+      if (!known && signup) pendingSignups.set(email.toLowerCase(), signup)
+      await delay(null)
+    },
+    async verifyCode(email, code) {
+      if (code !== DEMO_CODE) throw new Error('Token has expired or is invalid')
+      let u = db.users.find((x) => x.email.toLowerCase() === email.toLowerCase())
+      if (!u) {
+        const i = pendingSignups.get(email.toLowerCase())
+        if (!i) throw new Error('Token has expired or is invalid')
+        u = { id: uid(), email, password: '' }
+        db.users.push(u)
+        db.profiles.push({ id: u.id, role: i.role, email, first_name: i.firstName, last_name: i.lastName, company_name: i.companyName, phone: i.phone, logo_url: null })
+        pendingSignups.delete(email.toLowerCase())
+      }
+      const id = u.id
+      db.session = id
+      save()
+      listeners.forEach((l) => l(id))
       await delay(null)
     },
     async signOut() {

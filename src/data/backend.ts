@@ -55,6 +55,9 @@ export interface Backend {
   onAuthChange(cb: (userId: string | null) => void): () => void
   signUp(input: SignUpInput): Promise<{ needsConfirmation: boolean }>
   signIn(email: string, password: string): Promise<void>
+  /** Envoie un code de connexion par email. Avec `signup`, crée le compte s'il n'existe pas encore. */
+  requestCode(email: string, signup?: Omit<SignUpInput, 'email' | 'password'>): Promise<void>
+  verifyCode(email: string, code: string): Promise<void>
   signOut(): Promise<void>
   resetPassword(email: string): Promise<void>
   /** Appelé quand l'utilisateur revient par le lien « mot de passe oublié » */
@@ -104,6 +107,9 @@ export interface Backend {
 export function errorMessage(e: unknown): string {
   const raw = e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : String(e)
   if (/lot_access|tech_note|offer-files|Bucket not found|project_lot_catalog|column .*status.* does not exist|schema cache/i.test(raw)) return 'La base de données doit être mise à jour : relancez supabase/schema.sql dans l’éditeur SQL de Supabase.'
+  if (/signups not allowed/i.test(raw)) return 'Aucun compte avec cet email. Créez un compte.'
+  if (/token has expired|otp_expired|invalid.*otp|otp.*invalid/i.test(raw)) return 'Code incorrect ou expiré. Vérifiez-le ou demandez-en un nouveau.'
+  if (/security purposes/i.test(raw)) return 'Patientez une minute avant de redemander un code.'
   if (/invalid login credentials/i.test(raw)) return 'Email ou mot de passe incorrect.'
   if (/email not confirmed/i.test(raw)) return 'Confirmez d’abord votre adresse : un lien vous a été envoyé par email.'
   if (/user already registered/i.test(raw)) return 'Un compte existe déjà avec cet email. Connectez-vous.'

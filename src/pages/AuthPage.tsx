@@ -1,11 +1,12 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type PointerEvent } from 'react'
 import { Building2, CalendarClock, HardHat, MailCheck } from 'lucide-react'
+import { DEMO_CODE } from '../data/mock'
 import { api, errorMessage } from '../data'
 import { pendingCode, useAuth } from '../data/auth'
 import type { Role } from '../lib/types'
 import { Button, Field, Spinner, cx } from '../components/ui'
 
-type Mode = 'login' | 'signup' | 'reset' | 'sent' | 'reset-sent'
+type Mode = 'login' | 'password' | 'signup' | 'code' | 'reset' | 'reset-sent'
 
 export default function AuthPage() {
   const { userId, profile } = useAuth()
@@ -13,6 +14,8 @@ export default function AuthPage() {
   const [mode, setMode] = useState<Mode>(code ? 'signup' : 'login')
   const [role, setRole] = useState<Role>(code ? 'company' : 'buyer')
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', companyName: '', phone: '' })
+  const [code6, setCode6] = useState('')
+  const [resent, setResent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }))
@@ -25,18 +28,43 @@ export default function AuthPage() {
     setBusy(true)
     setError(null)
     try {
-      if (mode === 'login') await api.signIn(form.email.trim(), form.password)
-      else if (mode === 'signup') {
-        const { needsConfirmation } = await api.signUp({ ...form, email: form.email.trim(), role })
-        if (needsConfirmation) setMode('sent')
-      } else if (mode === 'reset') {
-        await api.resetPassword(form.email.trim())
+      const email = form.email.trim()
+      if (mode === 'login') {
+        await api.requestCode(email)
+        goCode()
+      } else if (mode === 'signup') {
+        const { firstName, lastName, companyName, phone } = form
+        await api.requestCode(email, { role, firstName, lastName, companyName, phone })
+        goCode()
+      } else if (mode === 'code') await api.verifyCode(email, code6)
+      else if (mode === 'password') await api.signIn(email, form.password)
+      else if (mode === 'reset') {
+        await api.resetPassword(email)
         setMode('reset-sent')
       }
     } catch (err) {
       setError(errorMessage(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const goCode = () => {
+    setCode6('')
+    setResent(false)
+    setMode('code')
+  }
+  const go = (m: Mode) => {
+    setMode(m)
+    setError(null)
+  }
+  const resend = async () => {
+    setError(null)
+    try {
+      await api.requestCode(form.email.trim())
+      setResent(true)
+    } catch (err) {
+      setError(errorMessage(err))
     }
   }
 
@@ -101,28 +129,69 @@ export default function AuthPage() {
             </p>
           )}
 
-          {mode === 'sent' || mode === 'reset-sent' ? (
+          {mode === 'reset-sent' ? (
             <div className="anim-pop flex flex-col items-start gap-4">
               <MailCheck size={40} className="text-plan" />
               <h2 className="font-title text-[2rem] leading-tight font-bold">Vérifiez votre boîte mail</h2>
-              <p className="text-ink-2">
-                {mode === 'sent'
-                  ? `Un lien de confirmation a été envoyé à ${form.email}. Cliquez dessus, puis revenez vous connecter.`
-                  : `Si un compte existe pour ${form.email}, un lien pour choisir un nouveau mot de passe vient d’être envoyé.`}
-              </p>
-              <Button onClick={() => setMode('login')}>Revenir à la connexion</Button>
+              <p className="text-ink-2">Si un compte existe pour {form.email}, un lien pour choisir un nouveau mot de passe vient d’être envoyé.</p>
+              <Button onClick={() => go('login')}>Revenir à la connexion</Button>
             </div>
+          ) : mode === 'code' ? (
+            <form onSubmit={submit} className="anim-fade grid gap-4">
+              <div>
+                <MailCheck size={36} className="mb-2 text-plan" />
+                <h2 className="font-title text-[2.125rem] leading-tight font-bold">Saisissez votre code</h2>
+                <p className="mt-1 text-ink-2">
+                  Un code vient d’être envoyé à <strong className="font-semibold text-ink">{form.email.trim()}</strong>. Pensez à regarder dans les indésirables.
+                </p>
+                {api.kind === 'mock' && <p className="mt-2 rounded-md bg-warn-soft px-3 py-2 text-[0.875rem] text-warn">Démo : aucun email n’est envoyé, le code est {DEMO_CODE}.</p>}
+              </div>
+              <Field label="Code reçu par email" htmlFor="a-code">
+                <input
+                  id="a-code"
+                  className="field num h-14 text-center text-[1.75rem] font-semibold tracking-[0.3em]"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  required
+                  maxLength={8}
+                  value={code6}
+                  onChange={(e) => setCode6(e.target.value.replace(/\D/g, ''))}
+                />
+              </Field>
+              {error && (
+                <p className="anim-shake rounded-md bg-bad-soft px-3 py-2 text-[0.875rem] text-bad" role="alert">
+                  {error}
+                </p>
+              )}
+              <Button type="submit" variant="primary" disabled={busy || code6.length < 6} className="h-11">
+                {busy && <Spinner />}
+                Valider
+              </Button>
+              <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[0.875rem] text-ink-2">
+                {resent ? (
+                  <span className="text-good">Nouveau code envoyé.</span>
+                ) : (
+                  <button type="button" className="hover:text-ink" onClick={resend}>
+                    Renvoyer un code
+                  </button>
+                )}
+                <button type="button" className="hover:text-ink" onClick={() => go('login')}>
+                  Changer d’email
+                </button>
+              </div>
+            </form>
           ) : (
             <>
               <div className="mb-6">
                 <h2 className="font-title text-[2.125rem] leading-tight font-bold">
-                  {mode === 'login' ? 'Connexion' : mode === 'signup' ? 'Créer un compte' : 'Mot de passe oublié'}
+                  {mode === 'signup' ? 'Créer un compte' : mode === 'reset' ? 'Mot de passe oublié' : 'Connexion'}
                 </h2>
                 {mode !== 'reset' && (
                   <p className="mt-1 text-ink-2">
-                    {mode === 'login' ? 'Pas encore de compte ? ' : 'Déjà inscrit ? '}
-                    <button type="button" className="font-medium text-plan underline-offset-2 hover:underline" onClick={() => (setMode(mode === 'login' ? 'signup' : 'login'), setError(null))}>
-                      {mode === 'login' ? 'Créer un compte' : 'Se connecter'}
+                    {mode === 'signup' ? 'Déjà inscrit ? ' : 'Pas encore de compte ? '}
+                    <button type="button" className="font-medium text-plan underline-offset-2 hover:underline" onClick={() => go(mode === 'signup' ? 'login' : 'signup')}>
+                      {mode === 'signup' ? 'Se connecter' : 'Créer un compte'}
                     </button>
                   </p>
                 )}
@@ -173,21 +242,16 @@ export default function AuthPage() {
                   </>
                 )}
 
-                <Field label="Email" htmlFor="a-email">
+                <Field
+                  label="Email"
+                  htmlFor="a-email"
+                  hint={mode === 'login' || mode === 'signup' ? 'Pas de mot de passe : vous recevrez un code à saisir ici.' : undefined}
+                >
                   <input id="a-email" className="field" type="email" required autoComplete="email" value={form.email} onChange={(e) => set({ email: e.target.value })} />
                 </Field>
-                {mode !== 'reset' && (
-                  <Field label="Mot de passe" htmlFor="a-pass" hint={mode === 'signup' ? '6 caractères minimum.' : undefined}>
-                    <input
-                      id="a-pass"
-                      className="field"
-                      type="password"
-                      required
-                      minLength={6}
-                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                      value={form.password}
-                      onChange={(e) => set({ password: e.target.value })}
-                    />
+                {mode === 'password' && (
+                  <Field label="Mot de passe" htmlFor="a-pass">
+                    <input id="a-pass" className="field" type="password" required minLength={6} autoComplete="current-password" value={form.password} onChange={(e) => set({ password: e.target.value })} />
                   </Field>
                 )}
 
@@ -199,18 +263,30 @@ export default function AuthPage() {
 
                 <Button type="submit" variant="primary" disabled={busy} className="mt-1 h-11">
                   {busy && <Spinner />}
-                  {mode === 'login' ? 'Se connecter' : mode === 'signup' ? 'Créer mon compte' : 'Recevoir le lien'}
+                  {mode === 'login' ? 'Recevoir mon code' : mode === 'password' ? 'Se connecter' : mode === 'signup' ? 'Créer mon compte' : 'Recevoir le lien'}
                 </Button>
-                {mode === 'login' && (
-                  <button type="button" className="justify-self-start text-[0.875rem] text-ink-2 hover:text-ink" onClick={() => (setMode('reset'), setError(null))}>
-                    Mot de passe oublié ?
-                  </button>
-                )}
-                {mode === 'reset' && (
-                  <button type="button" className="justify-self-start text-[0.875rem] text-ink-2 hover:text-ink" onClick={() => setMode('login')}>
-                    Revenir à la connexion
-                  </button>
-                )}
+                <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[0.875rem] text-ink-2">
+                  {mode === 'login' && (
+                    <button type="button" className="hover:text-ink" onClick={() => go('password')}>
+                      Me connecter avec un mot de passe
+                    </button>
+                  )}
+                  {mode === 'password' && (
+                    <>
+                      <button type="button" className="hover:text-ink" onClick={() => go('login')}>
+                        Recevoir un code par email
+                      </button>
+                      <button type="button" className="hover:text-ink" onClick={() => go('reset')}>
+                        Mot de passe oublié ?
+                      </button>
+                    </>
+                  )}
+                  {mode === 'reset' && (
+                    <button type="button" className="hover:text-ink" onClick={() => go('password')}>
+                      Revenir à la connexion
+                    </button>
+                  )}
+                </div>
               </form>
             </>
           )}

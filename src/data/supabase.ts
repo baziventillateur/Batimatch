@@ -47,6 +47,20 @@ export function createSupabaseBackend(): Backend {
       const { error } = await sb.auth.signInWithPassword({ email, password })
       if (error) throw error
     },
+    async requestCode(email, signup) {
+      const { error } = await sb.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: !!signup,
+          data: signup && { role: signup.role, first_name: signup.firstName, last_name: signup.lastName, company_name: signup.companyName, phone: signup.phone },
+        },
+      })
+      if (error) throw error
+    },
+    async verifyCode(email, code) {
+      const { error } = await sb.auth.verifyOtp({ email, token: code, type: 'email' })
+      if (error) throw error
+    },
     async signOut() {
       await sb.auth.signOut()
     },
