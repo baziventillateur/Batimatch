@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Backend, OfferLite, ProjectBundle, ProjectListItem } from './backend'
-import type { NotificationRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import type { NotificationRow, SsoRequestRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 
 // Adresse et clé publique du projet Supabase. La clé « publishable » est faite pour être
 // embarquée dans l'application : la sécurité repose sur les règles RLS de la base.
@@ -192,6 +192,22 @@ export function createSupabaseBackend(): Backend {
     },
     async markNotificationsRead(ids) {
       if (ids.length) check(await sb.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids))
+    },
+    async requestSso(i) {
+      check(await sb.rpc('request_sso', { p_company: i.company, p_contact: i.contact, p_email: i.email, p_phone: i.phone, p_users: i.users, p_provider: i.provider, p_message: i.message }))
+    },
+    async listSsoRequests() {
+      const rows = check(await sb.from('sso_requests').select('*, messages:sso_messages(*)').order('created_at', { ascending: false })) as SsoRequestRow[]
+      return rows.map((r) => ({ ...r, messages: [...(r.messages ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at)) }))
+    },
+    async updateSsoRequest(id, patch) {
+      check(await sb.from('sso_requests').update(patch).eq('id', id))
+    },
+    async sendSsoReply(requestId, subject, body) {
+      check(await sb.from('sso_messages').insert({ request_id: requestId, kind: 'reply', subject: subject.trim(), body: body.trim() }))
+    },
+    async deleteSsoRequest(id) {
+      check(await sb.from('sso_requests').delete().eq('id', id))
     },
     async getLot(id) {
       const lot = check(await sb.from('lots').select('*').eq('id', id).single()) as LotRow

@@ -32,6 +32,8 @@ Le script peut être relancé sans risque après une mise à jour : il ne suppri
 - L'acheteur ne peut pas modifier une offre déposée par une entreprise ; il peut saisir des offres reçues
   par mail (offres « manuelles »).
 - Chaque utilisateur ne peut déposer de logo que dans son propre dossier.
+- Les demandes de connexion SSO sont déposées par la seule fonction `request_sso()` (une par adresse et par jour) ;
+  elles ne sont lues et traitées que par le compte administrateur.
 
 Ces règles sont vérifiées par `supabase/test/rls.test.mjs` (`npm test`), sur un Postgres local qui simule
 Supabase.

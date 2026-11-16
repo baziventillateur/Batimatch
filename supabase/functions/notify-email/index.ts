@@ -1,7 +1,9 @@
-// Envoi des e-mails liés aux notifications Batimatch (demande d'accès reçue, accès accepté).
-// Appelée par la base (déclencheur sur public.notifications) avec le seul identifiant de l'alerte :
-// la fonction relit l'alerte, la marque « envoyée » de façon atomique, puis expédie via Resend.
-// Un appel extérieur ne peut donc ni choisir le destinataire, ni le contenu, ni renvoyer deux fois.
+// Envoi des e-mails Batimatch :
+//   • alertes (demande d'accès reçue, accès accepté, demande de connexion SSO pour l'administrateur) ;
+//   • messages aux entreprises qui demandent le SSO (accusé de réception, réponses de l'administrateur).
+// Appelée par la base (déclencheurs sur public.notifications et public.sso_messages) avec le seul
+// identifiant de la ligne : la fonction la relit, la marque « envoyée » de façon atomique, puis expédie
+// via Resend. Un appel extérieur ne peut donc ni choisir le destinataire, ni le contenu, ni renvoyer deux fois.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const SITE = 'https://batimatch.paceapp.fr'
@@ -21,6 +23,8 @@ interface Mail {
   cta: { label: string; url: string }
   reason: string
   text: string
+  /** Adresse de réponse, si ce n'est pas le contact Batimatch */
+  replyTo?: string
 }
 
 /** Même charte que les e-mails de connexion (supabase/emails/code.html) */
@@ -88,8 +92,13 @@ interface Notification {
   kind: string
   project_id: string | null
   lot_id: string | null
-  data: { project?: string; lot?: string; company?: string; contact?: string }
+  data: { project?: string; lot?: string; company?: string; contact?: string; email?: string; phone?: string; users?: string; provider?: string; message?: string }
 }
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/
+/** Texte libre → paragraphes HTML échappés */
+const paragraphs = (text: string) =>
+  text.trim().split(/\n{2,}/).map((b) => p(esc(b).replace(/\n/g, '<br>'))).join('')
 
 function compose(n: Notification): Mail | null {
   const project = n.data.project || 'votre projet'
@@ -123,7 +132,65 @@ function compose(n: Notification): Mail | null {
       text: `Votre accès au lot ${lot} (projet ${project}) est accepté.\n\nRépondre au lot : ${url}`,
     }
   }
+  if (n.kind === 'sso_requested') {
+    const url = `${SITE}/#/admin`
+    const d = n.data
+    const provider = d.provider === 'other' ? 'Autre fournisseur' : 'Microsoft Entra ID'
+    return {
+      subject: `Demande SSO : ${company}`,
+      preheader: `${d.contact || company} demande la connexion SSO. Traitez la demande depuis le panneau admin.`,
+      title: 'Nouvelle demande SSO',
+      subtitle: 'Une entreprise souhaite se connecter à Batimatch avec ses comptes professionnels.',
+      bodyHtml: facts([['Entreprise', company], ['Contact', d.contact ?? ''], ['E-mail', d.email ?? ''], ['Téléphone', d.phone ?? ''], ['Utilisateurs', d.users ?? ''], ['Annuaire', provider]]) +
+        (d.message ? p(`<strong style="color:#1B2A3A;">Message :</strong><br>${esc(d.message).replace(/\n/g, '<br>')}`) : '') +
+        p('Répondez, appelez et suivez l’activation depuis le panneau admin. Un accusé de réception est déjà parti vers l’entreprise.'),
+      cta: { label: 'Traiter la demande', url },
+      reason: 'Vous recevez cet e-mail parce que vous administrez Batimatch.',
+      text: `${company} demande la connexion SSO.\nContact : ${d.contact ?? ''}\nE-mail : ${d.email ?? ''}\nTéléphone : ${d.phone ?? ''}\nUtilisateurs : ${d.users ?? ''}\nAnnuaire : ${provider}\n${d.message ? `Message : ${d.message}\n` : ''}\nTraiter la demande : ${url}`,
+      replyTo: d.email && EMAIL_RE.test(d.email) ? d.email : undefined,
+    }
+  }
   return null
+}
+
+interface SsoMessage {
+  id: string
+  request_id: string
+  kind: 'ack' | 'reply'
+  subject: string
+  body: string
+}
+
+/** E-mail destiné à l'entreprise qui a demandé le SSO */
+function composeSso(m: SsoMessage): Mail {
+  const reason = 'Vous recevez cet e-mail parce qu’une demande de connexion SSO a été déposée avec cette adresse sur Batimatch.'
+  if (m.kind === 'ack') {
+    // Texte fixe, sans aucune donnée saisie dans le formulaire
+    return {
+      subject: 'Votre demande de connexion SSO Batimatch est bien reçue',
+      preheader: 'Nous revenons vers vous pour préparer l’activation avec votre service informatique.',
+      title: 'Demande bien reçue',
+      subtitle: 'Connexion SSO à Batimatch avec vos comptes professionnels.',
+      bodyHtml:
+        p('Bonjour,').replace('margin:18px 0 0', 'margin:0') +
+        p('Nous avons bien reçu votre demande de connexion SSO (authentification unique). Nous revenons vers vous rapidement pour préparer l’activation avec votre service informatique.') +
+        p('Avec le SSO, vos collaborateurs se connectent à Batimatch avec leur compte professionnel : aucun mot de passe supplémentaire, et un compte désactivé dans votre annuaire ne peut plus se connecter.') +
+        p('Si vous n’êtes pas à l’origine de cette demande, vous pouvez ignorer ce message.'),
+      cta: { label: 'Découvrir Batimatch', url: SITE },
+      reason,
+      text: `Bonjour,\n\nNous avons bien reçu votre demande de connexion SSO à Batimatch. Nous revenons vers vous rapidement pour préparer l'activation avec votre service informatique.\n\nSi vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer ce message.\n\n${SITE}`,
+    }
+  }
+  return {
+    subject: m.subject.trim(),
+    preheader: m.body.trim().replace(/\s+/g, ' ').slice(0, 110),
+    title: 'Votre connexion SSO Batimatch',
+    subtitle: 'Suite de votre demande de connexion avec vos comptes professionnels.',
+    bodyHtml: paragraphs(m.body).replace('margin:18px 0 0', 'margin:0'),
+    cta: { label: 'Ouvrir Batimatch', url: SITE },
+    reason,
+    text: `${m.body.trim()}\n\n${SITE}`,
+  }
 }
 
 const json = (body: unknown, status = 200) =>
@@ -131,21 +198,50 @@ const json = (body: unknown, status = 200) =>
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method' }, 405)
-  const { id } = await req.json().catch(() => ({}))
+  const payload = await req.json().catch(() => ({}))
+  const ssoId = payload?.sso_message
+  const id = ssoId ?? payload?.id
   if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'id' }, 400)
 
   const key = Deno.env.get('RESEND_API_KEY')
   if (!key) return json({ error: 'RESEND_API_KEY manquante' }, 500)
   const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+  const since = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+  const send = (to: string, mail: Mail) =>
+    fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: FROM, to: [to], reply_to: mail.replyTo ?? REPLY_TO, subject: mail.subject, html: layout(mail), text: mail.text }),
+    })
+
+  // Message à une entreprise qui a demandé le SSO : même verrou, le destinataire est celui de la demande
+  if (ssoId) {
+    const { data: m } = await sb
+      .from('sso_messages')
+      .update({ emailed_at: new Date().toISOString() })
+      .eq('id', id)
+      .is('emailed_at', null)
+      .gte('created_at', since)
+      .select('id, request_id, kind, subject, body')
+      .maybeSingle()
+    if (!m) return json({ sent: false })
+    const { data: r } = await sb.from('sso_requests').select('email').eq('id', m.request_id).maybeSingle()
+    if (!r?.email || !EMAIL_RE.test(r.email)) return json({ sent: false })
+    const res = await send(r.email, composeSso(m as SsoMessage))
+    if (!res.ok) {
+      await sb.from('sso_messages').update({ emailed_at: null }).eq('id', id)
+      return json({ error: 'resend', status: res.status, detail: await res.text() }, 502)
+    }
+    return json({ sent: true })
+  }
 
   // Verrou : une alerte récente, d'un type envoyé par e-mail, pas encore expédiée
-  const since = new Date(Date.now() - 15 * 60 * 1000).toISOString()
   const { data: n } = await sb
     .from('notifications')
     .update({ emailed_at: new Date().toISOString() })
     .eq('id', id)
     .is('emailed_at', null)
-    .in('kind', ['access_requested', 'access_approved'])
+    .in('kind', ['access_requested', 'access_approved', 'sso_requested'])
     .gte('created_at', since)
     .select('id, user_id, kind, project_id, lot_id, data')
     .maybeSingle()
@@ -157,11 +253,7 @@ Deno.serve(async (req) => {
   const to = u?.user?.email
   if (!mail || !to) return json({ sent: false })
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: [to], reply_to: REPLY_TO, subject: mail.subject, html: layout(mail), text: mail.text }),
-  })
+  const res = await send(to, mail)
   if (!res.ok) {
     await release()
     return json({ error: 'resend', status: res.status, detail: await res.text() }, 502)

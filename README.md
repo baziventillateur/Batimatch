@@ -22,6 +22,12 @@ En ligne : https://batimatch.paceapp.fr/
   écartée), commentaires internes, choix de l'offre retenue.
 - **Synthèse à présenter** : note imprimable ou en PDF pour faire valider le choix.
 
+### Grandes entreprises (SSO)
+- Sur la page de connexion, le lien « Connexion entreprise par SSO (Microsoft) » ouvre un formulaire de demande.
+- La demande déclenche un accusé de réception pour l'entreprise, un e-mail et une alerte dans la cloche pour l'administrateur.
+- Le panneau admin (onglet « Demandes SSO ») permet de traiter la demande de bout en bout : appel, réponse par e-mail
+  à partir de modèles, statut, note interne, historique des envois.
+
 ### Entreprise
 - Inscription (nom, prénom, entreprise, téléphone, email) et logo affiché à côté du nom de l'entreprise.
 - Accès à un projet par son code ou par le lien d'invitation.
