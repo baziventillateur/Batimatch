@@ -11,7 +11,7 @@ type Mode = 'login' | 'password' | 'signup' | 'code' | 'reset' | 'reset-sent'
 export default function AuthPage() {
   const { userId, profile } = useAuth()
   const code = pendingCode.get()
-  const [mode, setMode] = useState<Mode>(code ? 'signup' : 'login')
+  const [mode, setMode] = useState<Mode>(code ? 'signup' : 'password')
   const [role, setRole] = useState<Role>(code ? 'company' : 'buyer')
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', companyName: '', phone: '' })
   const [code6, setCode6] = useState('')
@@ -33,9 +33,8 @@ export default function AuthPage() {
         await api.requestCode(email)
         goCode()
       } else if (mode === 'signup') {
-        const { firstName, lastName, companyName, phone } = form
-        await api.requestCode(email, { role, firstName, lastName, companyName, phone })
-        goCode()
+        const { needsConfirmation } = await api.signUp({ ...form, email, role })
+        if (needsConfirmation) goCode()
       } else if (mode === 'code') await api.verifyCode(email, code6)
       else if (mode === 'password') await api.signIn(email, form.password)
       else if (mode === 'reset') {
@@ -134,7 +133,7 @@ export default function AuthPage() {
               <MailCheck size={40} className="text-plan" />
               <h2 className="font-title text-[2rem] leading-tight font-bold">Vérifiez votre boîte mail</h2>
               <p className="text-ink-2">Si un compte existe pour {form.email}, un lien pour choisir un nouveau mot de passe vient d’être envoyé.</p>
-              <Button onClick={() => go('login')}>Revenir à la connexion</Button>
+              <Button onClick={() => go('password')}>Revenir à la connexion</Button>
             </div>
           ) : mode === 'code' ? (
             <form onSubmit={submit} className="anim-fade grid gap-4">
@@ -176,7 +175,7 @@ export default function AuthPage() {
                     Renvoyer un code
                   </button>
                 )}
-                <button type="button" className="hover:text-ink" onClick={() => go('login')}>
+                <button type="button" className="hover:text-ink" onClick={() => go('password')}>
                   Changer d’email
                 </button>
               </div>
@@ -190,7 +189,7 @@ export default function AuthPage() {
                 {mode !== 'reset' && (
                   <p className="mt-1 text-ink-2">
                     {mode === 'signup' ? 'Déjà inscrit ? ' : 'Pas encore de compte ? '}
-                    <button type="button" className="font-medium text-plan underline-offset-2 hover:underline" onClick={() => go(mode === 'signup' ? 'login' : 'signup')}>
+                    <button type="button" className="font-medium text-plan underline-offset-2 hover:underline" onClick={() => go(mode === 'signup' ? 'password' : 'signup')}>
                       {mode === 'signup' ? 'Se connecter' : 'Créer un compte'}
                     </button>
                   </p>
@@ -245,13 +244,13 @@ export default function AuthPage() {
                 <Field
                   label="Email"
                   htmlFor="a-email"
-                  hint={mode === 'login' || mode === 'signup' ? 'Pas de mot de passe : vous recevrez un code à saisir ici.' : undefined}
+                  hint={mode === 'login' ? 'Vous recevrez un code à saisir ici. L’email peut mettre quelques minutes à arriver.' : mode === 'signup' ? 'Un code vous sera envoyé une seule fois, pour valider cette adresse.' : undefined}
                 >
                   <input id="a-email" className="field" type="email" required autoComplete="email" value={form.email} onChange={(e) => set({ email: e.target.value })} />
                 </Field>
-                {mode === 'password' && (
-                  <Field label="Mot de passe" htmlFor="a-pass">
-                    <input id="a-pass" className="field" type="password" required minLength={6} autoComplete="current-password" value={form.password} onChange={(e) => set({ password: e.target.value })} />
+                {(mode === 'password' || mode === 'signup') && (
+                  <Field label="Mot de passe" htmlFor="a-pass" hint={mode === 'signup' ? '6 caractères minimum.' : undefined}>
+                    <input id="a-pass" className="field" type="password" required minLength={6} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={form.password} onChange={(e) => set({ password: e.target.value })} />
                   </Field>
                 )}
 
@@ -273,11 +272,11 @@ export default function AuthPage() {
                   )}
                   {mode === 'password' && (
                     <>
-                      <button type="button" className="hover:text-ink" onClick={() => go('login')}>
-                        Recevoir un code par email
-                      </button>
                       <button type="button" className="hover:text-ink" onClick={() => go('reset')}>
                         Mot de passe oublié ?
+                      </button>
+                      <button type="button" className="hover:text-ink" onClick={() => go('login')}>
+                        Me connecter avec un code reçu par email
                       </button>
                     </>
                   )}
