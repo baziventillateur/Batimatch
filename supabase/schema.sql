@@ -157,6 +157,114 @@ alter table public.lot_access add column if not exists comment text;
 alter table public.lot_access drop constraint if exists lot_access_status_check;
 alter table public.lot_access add constraint lot_access_status_check check (status in ('pending', 'approved', 'refused', 'declined'));
 
+-- ─── Notifications (cloche) ─────────────────────────────────────────────────
+-- Une ligne par alerte destinée à un utilisateur. Elles sont créées par la base elle-même
+-- (déclencheur sur lot_access), jamais par l'application : personne ne peut en fabriquer.
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  kind text not null check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined')),
+  project_id uuid references public.projects (id) on delete cascade,
+  lot_id uuid references public.lots (id) on delete cascade,
+  -- Celui qui a provoqué l'alerte (l'entreprise qui demande, l'acheteur qui décide)
+  actor_id uuid references auth.users (id) on delete set null,
+  -- Libellés figés au moment de l'alerte : projet, lot, entreprise, contact, motif
+  data jsonb not null default '{}'::jsonb,
+  read_at timestamptz,
+  emailed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists notifications_user_idx on public.notifications (user_id, created_at desc);
+
+create or replace function public.notify_lot_access()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_project public.projects;
+  v_lot public.lots;
+  v_company public.profiles;
+  v_data jsonb;
+begin
+  select * into v_lot from public.lots where id = new.lot_id;
+  select * into v_project from public.projects where id = v_lot.project_id;
+  select * into v_company from public.profiles where id = new.user_id;
+  v_data := jsonb_build_object(
+    'project', v_project.name,
+    'lot', v_lot.name,
+    'company', coalesce(nullif(v_company.company_name, ''), trim(v_company.first_name || ' ' || v_company.last_name)),
+    'contact', trim(coalesce(v_company.first_name, '') || ' ' || coalesce(v_company.last_name, ''))
+  );
+
+  if tg_op = 'INSERT' then
+    if new.status = 'pending' then
+      insert into public.notifications (user_id, kind, project_id, lot_id, actor_id, data)
+      values (v_project.owner_id, 'access_requested', v_project.id, v_lot.id, new.user_id, v_data);
+    end if;
+    return new;
+  end if;
+
+  if new.status is distinct from old.status then
+    -- La demande est traitée : l'alerte « à valider » de l'acheteur n'a plus lieu d'être
+    if old.status = 'pending' then
+      update public.notifications set read_at = now()
+      where kind = 'access_requested' and lot_id = new.lot_id and actor_id = new.user_id and read_at is null;
+    end if;
+    if new.status = 'approved' and old.status <> 'declined' then
+      insert into public.notifications (user_id, kind, project_id, lot_id, actor_id, data)
+      values (new.user_id, 'access_approved', v_project.id, v_lot.id, v_project.owner_id, v_data);
+    elsif new.status = 'refused' then
+      insert into public.notifications (user_id, kind, project_id, lot_id, actor_id, data)
+      values (new.user_id, 'access_refused', v_project.id, v_lot.id, v_project.owner_id, v_data);
+    elsif new.status = 'declined' then
+      insert into public.notifications (user_id, kind, project_id, lot_id, actor_id, data)
+      values (v_project.owner_id, 'lot_declined', v_project.id, v_lot.id, new.user_id, v_data || jsonb_build_object('comment', new.comment));
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists lot_access_notify on public.lot_access;
+create trigger lot_access_notify
+  after insert or update on public.lot_access
+  for each row execute function public.notify_lot_access();
+
+-- Envoi de l'e-mail : la base appelle la fonction « notify-email » avec l'identifiant de l'alerte.
+-- La fonction relit l'alerte elle-même et ne l'envoie qu'une fois : l'appel ne transporte aucun contenu.
+do $$ begin
+  create extension if not exists pg_net;
+exception when others then null; -- absent hors Supabase (tests locaux)
+end $$;
+
+create or replace function public.notification_send_email()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.kind in ('access_requested', 'access_approved')
+     and exists (select 1 from pg_extension where extname = 'pg_net') then
+    perform net.http_post(
+      url := 'https://uhdanxctslncwwmcziba.supabase.co/functions/v1/notify-email',
+      body := jsonb_build_object('id', new.id),
+      headers := '{"Content-Type": "application/json"}'::jsonb
+    );
+  end if;
+  return new;
+exception when others then
+  return new; -- un e-mail qui ne part pas ne doit jamais bloquer la demande d'accès
+end;
+$$;
+
+drop trigger if exists notifications_email on public.notifications;
+create trigger notifications_email
+  after insert on public.notifications
+  for each row execute function public.notification_send_email();
+
 -- Données réservées à l'acheteur : budget, réglages et critères, décision
 create table if not exists public.lot_private (
   lot_id uuid primary key references public.lots (id) on delete cascade,
@@ -359,6 +467,7 @@ alter table public.project_members enable row level security;
 alter table public.lots enable row level security;
 alter table public.lot_private enable row level security;
 alter table public.lot_access enable row level security;
+alter table public.notifications enable row level security;
 alter table public.offers enable row level security;
 alter table public.offer_reviews enable row level security;
 alter table public.offer_comments enable row level security;
@@ -370,7 +479,7 @@ begin
   for r in
     select policyname, tablename from pg_policies
     where schemaname = 'public'
-      and tablename in ('profiles', 'projects', 'project_members', 'lots', 'lot_private', 'lot_access', 'offers', 'offer_reviews', 'offer_comments')
+      and tablename in ('profiles', 'projects', 'project_members', 'lots', 'lot_private', 'lot_access', 'notifications', 'offers', 'offer_reviews', 'offer_comments')
   loop
     execute format('drop policy if exists %I on public.%I', r.policyname, r.tablename);
   end loop;
@@ -434,6 +543,14 @@ create policy lot_access_decline on public.lot_access for update to authenticate
 create policy lot_access_delete on public.lot_access for delete to authenticated
   using (public.is_lot_owner(lot_id));
 
+-- Notifications : chacun lit les siennes et peut seulement les marquer comme lues ou les effacer
+create policy notifications_select on public.notifications for select to authenticated
+  using (user_id = auth.uid());
+create policy notifications_update on public.notifications for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy notifications_delete on public.notifications for delete to authenticated
+  using (user_id = auth.uid());
+
 -- Données privées du lot : acheteur uniquement
 create policy lot_private_all on public.lot_private for all to authenticated
   using (public.is_lot_owner(lot_id)) with check (public.is_lot_owner(lot_id));
@@ -481,6 +598,11 @@ grant select, insert, update, delete on
   public.profiles, public.projects, public.project_members, public.lots,
   public.lot_private, public.lot_access, public.offers, public.offer_reviews, public.offer_comments
   to authenticated;
+revoke all on public.notifications from authenticated, anon;
+grant select, delete on public.notifications to authenticated;
+grant update (read_at) on public.notifications to authenticated;
+revoke all on function public.notify_lot_access() from public, authenticated, anon;
+revoke all on function public.notification_send_email() from public, authenticated, anon;
 revoke all on function public.join_project(text) from public;
 grant execute on function public.join_project(text) to authenticated;
 revoke all on function public.project_lot_catalog(uuid) from public;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { REFRESH_EVENT } from '../components/Bell'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Check, ChevronLeft, Clock, Copy, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, Send, Share2, Trash2, UserMinus, X } from 'lucide-react'
 import { api, errorMessage } from '../data'
@@ -27,6 +28,12 @@ export default function ProjectPage() {
   }, [pid])
   useEffect(() => {
     load()
+  }, [load])
+
+  // Une demande traitée depuis la cloche met la page à jour
+  useEffect(() => {
+    window.addEventListener(REFRESH_EVENT, load)
+    return () => window.removeEventListener(REFRESH_EVENT, load)
   }, [load])
 
   if (error) return <ErrorBox message={error} onRetry={load} />

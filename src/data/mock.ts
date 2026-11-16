@@ -1,7 +1,7 @@
 // Backend de démonstration en mémoire (stocké dans le navigateur), qui reproduit
 // les règles d'accès de la base Supabase. Sert au développement et aux tests visuels.
 import type { SignUpInput, Backend, OfferLite } from './backend'
-import type { CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import type { NotificationRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 import { uid } from '../lib/id'
 
 const files = new Map<string, Blob>()
@@ -20,11 +20,12 @@ interface Db {
   offers: OfferRow[]
   reviews: ReviewRow[]
   comments: CommentRow[]
+  notifications: NotificationRow[]
   session: string | null
 }
 
 const KEY = 'batimatch:mock'
-const empty = (): Db => ({ users: [], profiles: [], projects: [], members: [], lots: [], privates: [], access: [], offers: [], reviews: [], comments: [], session: null })
+const empty = (): Db => ({ users: [], profiles: [], projects: [], members: [], lots: [], privates: [], access: [], offers: [], reviews: [], comments: [], notifications: [], session: null })
 
 function load(): Db {
   try {
@@ -46,6 +47,24 @@ export function createMockBackend(): Backend {
     }
   }
   const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v))
+  /** Même rôle que le déclencheur de la base : une alerte quand une demande d'accès évolue */
+  const notify = (kind: NotificationRow['kind'], lotId: string, companyId: string, toOwner: boolean, comment?: string) => {
+    const l = db.lots.find((x) => x.id === lotId)
+    const p = db.projects.find((x) => x.id === l?.project_id)
+    const c = db.profiles.find((x) => x.id === companyId)
+    if (!l || !p) return
+    db.notifications.push({
+      id: uid(),
+      user_id: toOwner ? p.owner_id : companyId,
+      kind,
+      project_id: p.id,
+      lot_id: l.id,
+      actor_id: toOwner ? companyId : p.owner_id,
+      data: { project: p.name, lot: l.name, company: c?.company_name || [c?.first_name, c?.last_name].filter(Boolean).join(' '), contact: [c?.first_name, c?.last_name].filter(Boolean).join(' '), comment },
+      read_at: null,
+      created_at: new Date().toISOString(),
+    })
+  }
   const now = () => new Date().toISOString()
   const today = () => new Date().toISOString().slice(0, 10)
   const me = () => {
@@ -296,12 +315,17 @@ export function createMockBackend(): Backend {
       if (!l || (l.status ?? 'published') !== 'published' || !isMember(l.project_id)) deny()
       if (db.access.some((a) => a.lot_id === lotId && a.user_id === uidMe)) throw new Error('duplicate key value violates unique constraint "lot_access_pkey"')
       db.access.push({ lot_id: lotId, user_id: uidMe, status: 'pending', requested_at: now(), decided_at: null })
+      notify('access_requested', lotId, uidMe, true)
       save()
       await delay(null)
     },
     async decideLotAccess(lotId, userId, status) {
       if (!isOwner(lotProject(lotId))) deny()
       const a = db.access.find((x) => x.lot_id === lotId && x.user_id === userId)
+      if (a && a.status !== status) {
+        if (a.status === 'pending') for (const n of db.notifications) if (n.kind === 'access_requested' && n.lot_id === lotId && n.actor_id === userId && !n.read_at) n.read_at = now()
+        notify(status === 'approved' ? 'access_approved' : 'access_refused', lotId, userId, false)
+      }
       if (a) Object.assign(a, { status, decided_at: now(), comment: null })
       save()
       await delay(null)
@@ -310,6 +334,7 @@ export function createMockBackend(): Backend {
       const a = db.access.find((x) => x.lot_id === lotId && x.user_id === me())
       if (!a || (a.status !== 'approved' && a.status !== 'declined') || !lotOpen(lotId)) throw new Error('Action non autorisée sur ce lot.')
       if (comment.trim().length < 3) throw new Error('Le motif doit comporter au moins 3 caractères.')
+      if (a.status !== 'declined') notify('lot_declined', lotId, a.user_id, true, comment.trim())
       Object.assign(a, { status: 'declined', comment: comment.trim(), decided_at: now() })
       save()
       await delay(null)
@@ -320,6 +345,14 @@ export function createMockBackend(): Backend {
       Object.assign(a, { status: 'approved', comment: null, decided_at: now() })
       save()
       await delay(null)
+    },
+    async listNotifications() {
+      const mine = db.notifications.filter((n) => n.user_id === db.session)
+      return delay(clone(mine).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 30))
+    },
+    async markNotificationsRead(ids) {
+      for (const n of db.notifications) if (ids.includes(n.id) && n.user_id === db.session && !n.read_at) n.read_at = now()
+      save()
     },
     async getLot(id) {
       const lot = db.lots.find((l) => l.id === id)

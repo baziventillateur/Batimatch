@@ -194,4 +194,20 @@ await as(B, `insert into storage.objects (bucket_id, name) values ('offer-files'
 await as(C1, `update public.offers set tech_note = '{"path":"p","name":"n.pdf","size":1,"at":"x"}' where id = $1`, [oid])
 console.log('✓ notice technique : dépôt cloisonné, lecture par l’acheteur après envoi')
 
+// Notifications : créées par la base, lisibles par leur seul destinataire, non falsifiables
+const nB = (await as(B, `select kind, read_at, data from public.notifications order by created_at`)).rows
+assert.ok(nB.some((n) => n.kind === 'access_requested' && n.data.company === 'TP Val-de-Seine'), 'demande d’accès notifiée à l’acheteur')
+assert.ok(nB.filter((n) => n.kind === 'access_requested').every((n) => n.read_at), 'demandes traitées : alertes soldées')
+assert.ok(nB.some((n) => n.kind === 'lot_declined' && n.data.comment), 'refus de répondre notifié avec son motif')
+const nC1 = (await as(C1, `select kind, user_id from public.notifications`)).rows
+assert.ok(nC1.some((n) => n.kind === 'access_approved'), 'accès accepté notifié à l’entreprise')
+assert.ok(nC1.some((n) => n.kind === 'access_refused'), 'accès refusé notifié à l’entreprise')
+assert.ok(nC1.every((n) => n.user_id === C1), 'aucune alerte d’un autre compte')
+await fails(C1, `insert into public.notifications (user_id, kind) values ('${B}', 'access_requested')`, 'alerte fabriquée')
+await fails(C1, `update public.notifications set data = '{}' where user_id = '${C1}'`, 'contenu d’alerte modifié')
+await as(C1, `update public.notifications set read_at = now() where user_id = $1`, [C1])
+const stolen = await as(C2, `update public.notifications set read_at = now() where user_id = $1 returning id`, [C1])
+assert.equal(stolen.rows.length, 0)
+console.log('✓ notifications : créées par la base, cloisonnées, non falsifiables')
+
 console.log('\nTous les tests de sécurité passent.')

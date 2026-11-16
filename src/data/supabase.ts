@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Backend, OfferLite, ProjectBundle, ProjectListItem } from './backend'
-import type { CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import type { NotificationRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 
 // Adresse et clé publique du projet Supabase. La clé « publishable » est faite pour être
 // embarquée dans l'application : la sécurité repose sur les règles RLS de la base.
@@ -186,6 +186,12 @@ export function createSupabaseBackend(): Backend {
     async undeclineLot(lotId) {
       const { data } = await sb.auth.getUser()
       check(await sb.from('lot_access').update({ status: 'approved', comment: null, decided_at: new Date().toISOString() }).eq('lot_id', lotId).eq('user_id', data.user?.id ?? ''))
+    },
+    async listNotifications() {
+      return check(await sb.from('notifications').select('id, user_id, kind, project_id, lot_id, actor_id, data, read_at, created_at').order('created_at', { ascending: false }).limit(30)) as NotificationRow[]
+    },
+    async markNotificationsRead(ids) {
+      if (ids.length) check(await sb.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids))
     },
     async getLot(id) {
       const lot = check(await sb.from('lots').select('*').eq('id', id).single()) as LotRow

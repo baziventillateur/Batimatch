@@ -52,6 +52,22 @@ export interface LotAccessRow {
   comment?: string | null
 }
 
+export type NotificationKind = 'access_requested' | 'access_approved' | 'access_refused' | 'lot_declined'
+
+/** Alerte de la cloche, créée par la base quand une demande d'accès évolue */
+export interface NotificationRow {
+  id: string
+  user_id: string
+  kind: NotificationKind
+  project_id: string | null
+  lot_id: string | null
+  /** Celui qui a provoqué l'alerte */
+  actor_id: string | null
+  data: { project?: string; lot?: string; company?: string; contact?: string; comment?: string | null }
+  read_at: string | null
+  created_at: string
+}
+
 /** Lot tel que le voit une entreprise avant d'y avoir accès : pas de DPGF */
 export interface LotCatalogItem {
   id: string

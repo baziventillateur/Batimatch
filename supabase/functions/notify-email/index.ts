@@ -1,0 +1,170 @@
+// Envoi des e-mails liés aux notifications Batimatch (demande d'accès reçue, accès accepté).
+// Appelée par la base (déclencheur sur public.notifications) avec le seul identifiant de l'alerte :
+// la fonction relit l'alerte, la marque « envoyée » de façon atomique, puis expédie via Resend.
+// Un appel extérieur ne peut donc ni choisir le destinataire, ni le contenu, ni renvoyer deux fois.
+import { createClient } from 'jsr:@supabase/supabase-js@2'
+
+const SITE = 'https://batimatch.paceapp.fr'
+const FROM = 'Batimatch <batimatch@paceapp.fr>'
+const REPLY_TO = 'contact@paceapp.fr'
+const SANS = 'Arial,Helvetica,sans-serif'
+
+const esc = (s: unknown) =>
+  String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+interface Mail {
+  subject: string
+  preheader: string
+  title: string
+  subtitle: string
+  bodyHtml: string
+  cta: { label: string; url: string }
+  reason: string
+  text: string
+}
+
+/** Même charte que les e-mails de connexion (supabase/emails/code.html) */
+function layout(m: Mail): string {
+  const pad = '&#847;&zwnj;&nbsp;'.repeat(20)
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>${esc(m.subject)}</title>
+<!--[if mso]><style>td,a,span,h1,p{font-family:Arial,sans-serif!important}</style><![endif]-->
+<style>@media (max-width:620px){.bm-pad{padding:28px 22px!important}}</style>
+</head>
+<body style="margin:0;padding:0;background:#F3F5F8;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${esc(m.preheader)}${pad}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F3F5F8" style="background:#F3F5F8;"><tr><td align="center" style="padding:28px 12px 40px;">
+<!--[if mso]><table role="presentation" width="560" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+ <tr><td class="bm-pad" bgcolor="#1B2A3A" style="background:#1B2A3A;border-radius:14px 14px 0 0;padding:30px 40px 28px;">
+  <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+   <td valign="bottom" style="padding-right:10px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" bgcolor="#F3F5F8" style="background:#F3F5F8;border-radius:6px;"><tr>
+     <td valign="bottom" style="padding:6px 0 6px 6px;"><div style="width:5px;height:8px;background:#1B2A3A;font-size:0;line-height:0;">&nbsp;</div></td>
+     <td valign="bottom" style="padding:6px 0 6px 3px;"><div style="width:5px;height:14px;background:#1B2A3A;font-size:0;line-height:0;">&nbsp;</div></td>
+     <td valign="bottom" style="padding:6px 6px 6px 3px;"><div style="width:5px;height:19px;background:#F8E04E;font-size:0;line-height:0;">&nbsp;</div></td>
+    </tr></table>
+   </td>
+   <td valign="middle" style="font:700 22px/24px 'Barlow Condensed','Arial Narrow',${SANS};color:#ffffff;">Batimatch<br><span style="font:400 11px/14px ${SANS};color:#AEBBC8;">by PaceApp</span></td>
+  </tr></table>
+  <h1 style="margin:26px 0 0;font:700 26px/32px ${SANS};color:#ffffff;">${esc(m.title)}</h1>
+  <p style="margin:8px 0 0;font:400 15px/23px ${SANS};color:#C9D3DD;">${esc(m.subtitle)}</p>
+ </td></tr>
+ <tr><td class="bm-pad" bgcolor="#ffffff" style="background:#ffffff;border-radius:0 0 14px 14px;padding:32px 40px 34px;border:1px solid #D3DBE3;border-top:0;">
+  ${m.bodyHtml}
+  <div style="height:24px;line-height:24px;font-size:0;">&nbsp;</div>
+  <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${esc(m.cta.url)}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="12%" stroke="f" fillcolor="#2A5C8F"><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">${esc(m.cta.label)}</center></v:roundrect><![endif]-->
+  <!--[if !mso]><!--><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#2A5C8F" style="background:#2A5C8F;border-radius:8px;">
+   <a href="${esc(m.cta.url)}" style="display:inline-block;padding:14px 28px;font:700 16px/20px ${SANS};color:#ffffff;text-decoration:none;border-radius:8px;">${esc(m.cta.label)}</a>
+  </td></tr></table><!--<![endif]-->
+ </td></tr>
+ <tr><td style="padding:22px 16px 0;text-align:center;font:400 12px/19px ${SANS};color:#75838F;">
+  Batimatch, consultations d'entreprises du BTP &nbsp;|&nbsp; <a href="${SITE}" style="color:#75838F;text-decoration:underline;">batimatch.paceapp.fr</a> &nbsp;|&nbsp; <a href="mailto:${REPLY_TO}" style="color:#75838F;text-decoration:underline;">Nous contacter</a><br>
+  ${esc(m.reason)}
+ </td></tr>
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td></tr></table>
+</body>
+</html>`
+}
+
+const row = (label: string, value: string) =>
+  `<tr><td style="padding:7px 0;font:400 13px/20px ${SANS};color:#75838F;width:110px;vertical-align:top;">${esc(label)}</td><td style="padding:7px 0;font:700 15px/22px ${SANS};color:#1B2A3A;">${esc(value)}</td></tr>`
+const facts = (rows: [string, string][]) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F3F5F8" style="background:#F3F5F8;border:1px solid #D3DBE3;border-radius:10px;"><tr><td style="padding:10px 18px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows.filter((r) => r[1]).map((r) => row(r[0], r[1])).join('')}</table></td></tr></table>`
+const p = (html: string) => `<p style="margin:18px 0 0;font:400 15px/24px ${SANS};color:#46586A;">${html}</p>`
+
+interface Notification {
+  id: string
+  user_id: string
+  kind: string
+  project_id: string | null
+  lot_id: string | null
+  data: { project?: string; lot?: string; company?: string; contact?: string }
+}
+
+function compose(n: Notification): Mail | null {
+  const project = n.data.project || 'votre projet'
+  const lot = n.data.lot || 'un lot'
+  const company = n.data.company || 'Une entreprise'
+  if (n.kind === 'access_requested') {
+    const url = `${SITE}/#/p/${n.project_id}`
+    return {
+      subject: `${company} demande l'accès au lot ${lot}`,
+      preheader: `Projet ${project} : acceptez ou refusez la demande dans Batimatch.`,
+      title: 'Nouvelle demande d’accès',
+      subtitle: 'Une entreprise souhaite répondre à l’un de vos lots.',
+      bodyHtml: facts([['Entreprise', company], ['Contact', n.data.contact ?? ''], ['Lot', lot], ['Projet', project]]) +
+        p('Tant que vous n’avez pas accepté, l’entreprise ne voit ni la DPGF ni les autres offres.'),
+      cta: { label: 'Voir la demande', url },
+      reason: 'Vous recevez cet e-mail parce que vous êtes l’acheteur de ce projet sur Batimatch.',
+      text: `${company} demande l'accès au lot ${lot} (projet ${project}).\nContact : ${n.data.contact ?? ''}\n\nAccepter ou refuser : ${url}`,
+    }
+  }
+  if (n.kind === 'access_approved') {
+    const url = `${SITE}/#/p/${n.project_id}/l/${n.lot_id}`
+    return {
+      subject: `Accès accepté : lot ${lot}, ${project}`,
+      preheader: 'Vous pouvez maintenant consulter la DPGF et saisir votre offre.',
+      title: 'Votre accès est accepté',
+      subtitle: 'Vous pouvez consulter la DPGF et saisir votre offre.',
+      bodyHtml: facts([['Lot', lot], ['Projet', project]]) +
+        p('Votre offre reste modifiable jusqu’à la date de rendu indiquée sur le lot.'),
+      cta: { label: 'Répondre au lot', url },
+      reason: 'Vous recevez cet e-mail parce que vous avez demandé l’accès à ce lot sur Batimatch.',
+      text: `Votre accès au lot ${lot} (projet ${project}) est accepté.\n\nRépondre au lot : ${url}`,
+    }
+  }
+  return null
+}
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+
+Deno.serve(async (req) => {
+  if (req.method !== 'POST') return json({ error: 'method' }, 405)
+  const { id } = await req.json().catch(() => ({}))
+  if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'id' }, 400)
+
+  const key = Deno.env.get('RESEND_API_KEY')
+  if (!key) return json({ error: 'RESEND_API_KEY manquante' }, 500)
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
+  // Verrou : une alerte récente, d'un type envoyé par e-mail, pas encore expédiée
+  const since = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+  const { data: n } = await sb
+    .from('notifications')
+    .update({ emailed_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('emailed_at', null)
+    .in('kind', ['access_requested', 'access_approved'])
+    .gte('created_at', since)
+    .select('id, user_id, kind, project_id, lot_id, data')
+    .maybeSingle()
+  if (!n) return json({ sent: false })
+
+  const release = () => sb.from('notifications').update({ emailed_at: null }).eq('id', id)
+  const mail = compose(n as Notification)
+  const { data: u } = await sb.auth.admin.getUserById(n.user_id)
+  const to = u?.user?.email
+  if (!mail || !to) return json({ sent: false })
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: FROM, to: [to], reply_to: REPLY_TO, subject: mail.subject, html: layout(mail), text: mail.text }),
+  })
+  if (!res.ok) {
+    await release()
+    return json({ error: 'resend', status: res.status, detail: await res.text() }, 502)
+  }
+  return json({ sent: true })
+})

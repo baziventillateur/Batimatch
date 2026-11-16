@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './data/auth'
 import { api, errorMessage } from './data'
 import { Button, CompanyLogo, Dialog, Field, IconButton, Loading, Menu, MenuItem } from './components/ui'
 import { useTheme } from './lib/theme'
+import { Bell } from './components/Bell'
 import AuthPage from './pages/AuthPage'
 import Home from './pages/Home'
 import ProfilePage from './pages/ProfilePage'
@@ -54,6 +55,7 @@ function UserMenu() {
   return (
     <div className="flex items-center gap-1.5">
       <ThemeToggle />
+      <Bell />
       <span className="hidden text-right leading-tight sm:block">
         <span className="block text-[0.875rem] font-medium">{name}</span>
         <span className="block text-[0.75rem] text-ink-3">{profile.role === 'buyer' ? 'Acheteur' : 'Entreprise'}</span>
