@@ -1,10 +1,11 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type PointerEvent } from 'react'
-import { Building2, CalendarClock, HardHat, MailCheck } from 'lucide-react'
+import { Building2, CalendarClock, HardHat, MailCheck, ShieldCheck } from 'lucide-react'
 import { DEMO_CODE } from '../data/mock'
 import { api, errorMessage } from '../data'
 import { pendingCode, useAuth } from '../data/auth'
 import type { Role } from '../lib/types'
 import { Button, Field, Spinner, cx } from '../components/ui'
+import { SsoRequestDialog } from '../components/SsoRequestDialog'
 
 type Mode = 'login' | 'password' | 'signup' | 'code' | 'reset' | 'reset-sent'
 
@@ -18,6 +19,7 @@ export default function AuthPage() {
   const [resent, setResent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sso, setSso] = useState(false)
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }))
 
   // Connecté mais sans profil : on le complète
@@ -287,11 +289,20 @@ export default function AuthPage() {
                   )}
                 </div>
               </form>
+
+              {/* Grandes entreprises : connexion avec les comptes professionnels, activée sur demande */}
+              <div className="mt-5 flex justify-center border-t border-line-2 pt-3.5">
+                <button type="button" className="inline-flex items-center gap-1.5 rounded-sm text-[0.8125rem] text-ink-3 underline-offset-2 hover:text-ink hover:underline" onClick={() => setSso(true)}>
+                  <ShieldCheck size={14} aria-hidden="true" />
+                  Connexion entreprise par SSO (Microsoft)
+                </button>
+              </div>
             </>
           )}
           </main>
         </div>
       </div>
+      <SsoRequestDialog open={sso} onClose={() => setSso(false)} />
     </div>
   )
 }

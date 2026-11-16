@@ -52,7 +52,7 @@ export interface LotAccessRow {
   comment?: string | null
 }
 
-export type NotificationKind = 'access_requested' | 'access_approved' | 'access_refused' | 'lot_declined'
+export type NotificationKind = 'access_requested' | 'access_approved' | 'access_refused' | 'lot_declined' | 'sso_requested'
 
 /** Alerte de la cloche, créée par la base quand une demande d'accès évolue */
 export interface NotificationRow {
@@ -63,9 +63,52 @@ export interface NotificationRow {
   lot_id: string | null
   /** Celui qui a provoqué l'alerte */
   actor_id: string | null
-  data: { project?: string; lot?: string; company?: string; contact?: string; comment?: string | null }
+  data: { project?: string; lot?: string; company?: string; contact?: string; comment?: string | null; request?: string; email?: string; users?: string }
   read_at: string | null
   created_at: string
+}
+
+/** new = à traiter ; contacted = réponse envoyée ; in_progress = activation en cours ; declined = sans suite */
+export type SsoStatus = 'new' | 'contacted' | 'in_progress' | 'activated' | 'declined'
+export type SsoProvider = 'microsoft' | 'other'
+
+/** E-mail envoyé à l'entreprise : accusé de réception automatique ou réponse de l'administrateur */
+export interface SsoMessageRow {
+  id: string
+  request_id: string
+  kind: 'ack' | 'reply'
+  subject: string
+  body: string
+  emailed_at: string | null
+  created_at: string
+}
+
+/** Demande de connexion SSO déposée depuis la page de connexion */
+export interface SsoRequestRow {
+  id: string
+  company_name: string
+  contact_name: string
+  email: string
+  phone: string
+  user_count: string
+  provider: SsoProvider
+  message: string
+  status: SsoStatus
+  /** Note interne de l'administrateur */
+  admin_note: string
+  created_at: string
+  updated_at: string
+  messages: SsoMessageRow[]
+}
+
+export interface SsoRequestInput {
+  company: string
+  contact: string
+  email: string
+  phone: string
+  users: string
+  provider: SsoProvider
+  message: string
 }
 
 /** Lot tel que le voit une entreprise avant d'y avoir accès : pas de DPGF */

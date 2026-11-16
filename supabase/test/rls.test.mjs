@@ -12,7 +12,7 @@ await db.exec(`
   create role anon nologin;
   create role authenticated nologin;
   create schema auth;
-  create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
+  create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', email_confirmed_at timestamptz default now());
   create function auth.uid() returns uuid language sql stable as $$
     select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   grant usage on schema auth to authenticated, anon;
@@ -209,5 +209,59 @@ await as(C1, `update public.notifications set read_at = now() where user_id = $1
 const stolen = await as(C2, `update public.notifications set read_at = now() where user_id = $1 returning id`, [C1])
 assert.equal(stolen.rows.length, 0)
 console.log('✓ notifications : créées par la base, cloisonnées, non falsifiables')
+
+// Demandes SSO : déposées sans compte par request_sso(), lues et traitées par le seul administrateur
+const A = '44444444-4444-4444-4444-444444444444'
+await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${A}', 'baziventillateur@gmail.com', '{"role":"buyer","company_name":"Batimatch"}')`)
+async function anon(sql, params = []) {
+  await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
+  try {
+    return await db.query(sql, params)
+  } finally {
+    await db.exec('reset role')
+  }
+}
+await anon(`select public.request_sso('Grand Groupe BTP', 'Claire Martin', ' Claire.Martin@GrandGroupe.fr ', '01 02 03 04 05', '51 à 200', 'microsoft', 'Nous utilisons Microsoft 365.')`)
+await anon(`select public.request_sso('Grand Groupe BTP', 'Claire Martin', 'claire.martin@grandgroupe.fr')`) // doublon du jour : ignoré
+let anonFails = 0
+for (const sql of [
+  `select public.request_sso('G', 'Claire Martin', 'a@b.fr')`,
+  `select public.request_sso('Grand Groupe', 'Claire Martin', 'pas-un-email')`,
+  `select * from public.sso_requests`,
+  `insert into public.sso_requests (company_name, email) values ('x', 'x@y.fr')`,
+  `select public.admin_ids()`,
+]) {
+  try {
+    await anon(sql)
+  } catch {
+    anonFails++
+  }
+}
+assert.equal(anonFails, 5, 'sans compte : seule request_sso() avec des données valides est possible')
+const reqs = (await as(A, `select * from public.sso_requests`)).rows
+assert.equal(reqs.length, 1, 'une seule demande malgré le doublon')
+assert.equal(reqs[0].email, 'claire.martin@grandgroupe.fr')
+assert.equal(reqs[0].status, 'new')
+const rid = reqs[0].id
+assert.equal((await as(B, `select * from public.sso_requests`)).rows.length, 0, 'demandes invisibles des autres comptes')
+assert.equal((await as(C1, `select * from public.sso_messages`)).rows.length, 0)
+assert.equal((await as(B, `update public.sso_requests set status = 'activated' returning id`)).rows.length, 0)
+await fails(C1, `insert into public.sso_messages (request_id, kind, subject, body) values ('${rid}', 'reply', 'Bonjour', 'Message pirate')`, 'réponse envoyée par un non-admin')
+const nA = (await as(A, `select kind, data, read_at from public.notifications`)).rows
+assert.equal(nA.length, 1)
+assert.equal(nA[0].kind, 'sso_requested')
+assert.equal(nA[0].data.company, 'Grand Groupe BTP')
+assert.equal((await as(B, `select * from public.notifications where kind = 'sso_requested'`)).rows.length, 0)
+assert.deepEqual((await as(A, `select kind from public.sso_messages`)).rows.map((m) => m.kind), ['ack'])
+await fails(A, `insert into public.sso_messages (request_id, kind) values ('${rid}', 'ack')`, 'accusé de réception fabriqué')
+await fails(A, `insert into public.sso_messages (request_id, kind, subject, body) values ('${rid}', 'reply', '', '')`, 'réponse vide')
+await as(A, `insert into public.sso_messages (request_id, kind, subject, body) values ($1, 'reply', 'Votre demande', 'Bonjour, parlons-en.')`, [rid])
+assert.equal((await as(A, `select status from public.sso_requests`)).rows[0].status, 'contacted', 'répondre fait passer la demande à « contactée »')
+assert.ok((await as(A, `select read_at from public.notifications`)).rows[0].read_at, 'alerte soldée une fois la réponse envoyée')
+await as(A, `update public.sso_requests set status = 'activated', admin_note = 'Tenant reçu' where id = $1`, [rid])
+await fails(A, `update public.sso_requests set email = 'autre@x.fr' where id = '${rid}'`, 'coordonnées de la demande modifiées')
+await as(A, `delete from public.sso_requests where id = $1`, [rid])
+assert.equal((await as(A, `select * from public.sso_messages`)).rows.length, 0)
+console.log('✓ demandes SSO : dépôt sans compte encadré, traitement réservé à l’administrateur')
 
 console.log('\nTous les tests de sécurité passent.')

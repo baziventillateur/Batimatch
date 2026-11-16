@@ -163,7 +163,7 @@ alter table public.lot_access add constraint lot_access_status_check check (stat
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
-  kind text not null check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined')),
+  kind text not null check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested')),
   project_id uuid references public.projects (id) on delete cascade,
   lot_id uuid references public.lots (id) on delete cascade,
   -- Celui qui a provoqué l'alerte (l'entreprise qui demande, l'acheteur qui décide)
@@ -175,6 +175,11 @@ create table if not exists public.notifications (
   created_at timestamptz not null default now()
 );
 create index if not exists notifications_user_idx on public.notifications (user_id, created_at desc);
+
+-- Mise à jour pour les bases déjà créées : alerte « demande de connexion SSO » (destinée à l'administrateur)
+alter table public.notifications drop constraint if exists notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check
+  check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested'));
 
 create or replace function public.notify_lot_access()
 returns trigger
@@ -246,7 +251,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.kind in ('access_requested', 'access_approved')
+  if new.kind in ('access_requested', 'access_approved', 'sso_requested')
      and exists (select 1 from pg_extension where extname = 'pg_net') then
     perform net.http_post(
       url := 'https://uhdanxctslncwwmcziba.supabase.co/functions/v1/notify-email',
@@ -264,6 +269,153 @@ drop trigger if exists notifications_email on public.notifications;
 create trigger notifications_email
   after insert on public.notifications
   for each row execute function public.notification_send_email();
+
+-- ─── Demandes de connexion SSO (grandes entreprises) ────────────────────────
+-- Sur la page de connexion, une entreprise peut demander l'activation de la connexion unique
+-- (SSO Microsoft). La demande est créée par request_sso(), seule porte d'entrée ouverte sans compte ;
+-- elle est ensuite lue et traitée uniquement par l'administrateur, depuis le panneau admin.
+
+-- Comptes administrateurs de la plateforme (adresse vérifiée)
+create or replace function public.admin_ids()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select id from auth.users
+  where lower(email) = 'baziventillateur@gmail.com' and email_confirmed_at is not null
+$$;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select auth.uid() is not null and auth.uid() in (select public.admin_ids())
+$$;
+
+create table if not exists public.sso_requests (
+  id uuid primary key default gen_random_uuid(),
+  company_name text not null,
+  contact_name text not null default '',
+  email text not null,
+  phone text not null default '',
+  -- Tranche indicative saisie par l'entreprise (« 11 à 50 »…)
+  user_count text not null default '',
+  provider text not null default 'microsoft' check (provider in ('microsoft', 'other')),
+  message text not null default '',
+  -- new = à traiter ; contacted = réponse envoyée ; in_progress = activation en cours ; activated ; declined = sans suite
+  status text not null default 'new' check (status in ('new', 'contacted', 'in_progress', 'activated', 'declined')),
+  -- Note interne de l'administrateur, jamais envoyée
+  admin_note text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists sso_requests_created_idx on public.sso_requests (created_at desc);
+create index if not exists sso_requests_email_idx on public.sso_requests (email, created_at desc);
+
+-- E-mails envoyés à l'entreprise : accusé de réception automatique (ack) et réponses de l'administrateur (reply)
+create table if not exists public.sso_messages (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references public.sso_requests (id) on delete cascade,
+  kind text not null check (kind in ('ack', 'reply')),
+  subject text not null default '' check (length(subject) <= 200),
+  body text not null default '' check (length(body) <= 5000),
+  emailed_at timestamptz,
+  created_at timestamptz not null default now(),
+  check (kind = 'ack' or (length(trim(subject)) > 0 and length(trim(body)) > 0))
+);
+create index if not exists sso_messages_request_idx on public.sso_messages (request_id, created_at);
+
+-- Dépôt d'une demande, avec ou sans compte. Les garde-fous évitent que le formulaire serve à
+-- inonder une boîte mail : une seule demande par adresse et par jour, et un plafond global par heure.
+create or replace function public.request_sso(
+  p_company text,
+  p_contact text,
+  p_email text,
+  p_phone text default '',
+  p_users text default '',
+  p_provider text default 'microsoft',
+  p_message text default ''
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_company text := left(trim(coalesce(p_company, '')), 120);
+  v_contact text := left(trim(coalesce(p_contact, '')), 120);
+  v_email text := lower(trim(coalesce(p_email, '')));
+  v_phone text := left(trim(coalesce(p_phone, '')), 40);
+  v_users text := left(trim(coalesce(p_users, '')), 40);
+  v_message text := left(trim(coalesce(p_message, '')), 2000);
+  v_id uuid;
+begin
+  if length(v_company) < 2 then raise exception 'sso_company'; end if;
+  if length(v_contact) < 2 then raise exception 'sso_contact'; end if;
+  if length(v_email) > 200 or v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]{2,}$' then raise exception 'sso_email'; end if;
+
+  -- Déjà demandé aujourd'hui avec cette adresse : rien de plus à faire, la première demande suit son cours
+  if exists (select 1 from public.sso_requests where email = v_email and created_at > now() - interval '24 hours') then
+    return;
+  end if;
+  if (select count(*) from public.sso_requests where created_at > now() - interval '1 hour') >= 10 then
+    raise exception 'sso_busy';
+  end if;
+
+  insert into public.sso_requests (company_name, contact_name, email, phone, user_count, provider, message)
+  values (v_company, v_contact, v_email, v_phone, v_users, case when p_provider = 'other' then 'other' else 'microsoft' end, v_message)
+  returning id into v_id;
+
+  -- Accusé de réception pour l'entreprise (texte fixe, composé par la fonction d'envoi)
+  insert into public.sso_messages (request_id, kind) values (v_id, 'ack');
+
+  -- Alerte dans la cloche de l'administrateur, doublée d'un e-mail
+  insert into public.notifications (user_id, kind, data)
+  select a, 'sso_requested', jsonb_build_object(
+    'request', v_id, 'company', v_company, 'contact', v_contact, 'email', v_email,
+    'phone', v_phone, 'users', v_users, 'provider', case when p_provider = 'other' then 'other' else 'microsoft' end,
+    'message', left(v_message, 600))
+  from public.admin_ids() a;
+end;
+$$;
+
+-- À chaque message : envoi de l'e-mail par la fonction « notify-email » (qui relit le message elle-même),
+-- et une demande à laquelle l'administrateur vient de répondre n'est plus « à traiter ».
+create or replace function public.sso_message_created()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.kind = 'reply' then
+    update public.sso_requests set status = 'contacted' where id = new.request_id and status = 'new';
+    update public.notifications set read_at = now()
+    where kind = 'sso_requested' and read_at is null and data ->> 'request' = new.request_id::text;
+  end if;
+  begin
+    if exists (select 1 from pg_extension where extname = 'pg_net') then
+      perform net.http_post(
+        url := 'https://uhdanxctslncwwmcziba.supabase.co/functions/v1/notify-email',
+        body := jsonb_build_object('sso_message', new.id),
+        headers := '{"Content-Type": "application/json"}'::jsonb
+      );
+    end if;
+  exception when others then null; -- un e-mail qui ne part pas ne doit pas faire échouer la demande
+  end;
+  return new;
+end;
+$$;
+
+drop trigger if exists sso_messages_created on public.sso_messages;
+create trigger sso_messages_created
+  after insert on public.sso_messages
+  for each row execute function public.sso_message_created();
 
 -- Données réservées à l'acheteur : budget, réglages et critères, décision
 create table if not exists public.lot_private (
@@ -344,7 +496,7 @@ $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles', 'projects', 'lots', 'lot_private', 'offers', 'offer_reviews'] loop
+  foreach t in array array['profiles', 'projects', 'lots', 'lot_private', 'offers', 'offer_reviews', 'sso_requests'] loop
     execute format('drop trigger if exists %I_touch on public.%I', t, t);
     execute format('create trigger %I_touch before update on public.%I for each row execute function public.touch_updated_at()', t, t);
   end loop;
@@ -468,6 +620,8 @@ alter table public.lots enable row level security;
 alter table public.lot_private enable row level security;
 alter table public.lot_access enable row level security;
 alter table public.notifications enable row level security;
+alter table public.sso_requests enable row level security;
+alter table public.sso_messages enable row level security;
 alter table public.offers enable row level security;
 alter table public.offer_reviews enable row level security;
 alter table public.offer_comments enable row level security;
@@ -479,7 +633,7 @@ begin
   for r in
     select policyname, tablename from pg_policies
     where schemaname = 'public'
-      and tablename in ('profiles', 'projects', 'project_members', 'lots', 'lot_private', 'lot_access', 'notifications', 'offers', 'offer_reviews', 'offer_comments')
+      and tablename in ('profiles', 'projects', 'project_members', 'lots', 'lot_private', 'lot_access', 'notifications', 'sso_requests', 'sso_messages', 'offers', 'offer_reviews', 'offer_comments')
   loop
     execute format('drop policy if exists %I on public.%I', r.policyname, r.tablename);
   end loop;
@@ -551,6 +705,18 @@ create policy notifications_update on public.notifications for update to authent
 create policy notifications_delete on public.notifications for delete to authenticated
   using (user_id = auth.uid());
 
+-- Demandes SSO : réservées à l'administrateur. La création passe uniquement par request_sso().
+create policy sso_requests_select on public.sso_requests for select to authenticated
+  using (public.is_admin());
+create policy sso_requests_update on public.sso_requests for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy sso_requests_delete on public.sso_requests for delete to authenticated
+  using (public.is_admin());
+create policy sso_messages_select on public.sso_messages for select to authenticated
+  using (public.is_admin());
+create policy sso_messages_insert on public.sso_messages for insert to authenticated
+  with check (public.is_admin() and kind = 'reply');
+
 -- Données privées du lot : acheteur uniquement
 create policy lot_private_all on public.lot_private for all to authenticated
   using (public.is_lot_owner(lot_id)) with check (public.is_lot_owner(lot_id));
@@ -603,6 +769,18 @@ grant select, delete on public.notifications to authenticated;
 grant update (read_at) on public.notifications to authenticated;
 revoke all on function public.notify_lot_access() from public, authenticated, anon;
 revoke all on function public.notification_send_email() from public, authenticated, anon;
+revoke all on public.sso_requests, public.sso_messages from authenticated, anon;
+grant select, delete on public.sso_requests to authenticated;
+grant update (status, admin_note) on public.sso_requests to authenticated;
+grant select on public.sso_messages to authenticated;
+grant insert (request_id, kind, subject, body) on public.sso_messages to authenticated;
+revoke all on function public.admin_ids() from public, authenticated, anon;
+revoke all on function public.sso_message_created() from public, authenticated, anon;
+revoke all on function public.is_admin() from public, anon;
+grant execute on function public.is_admin() to authenticated;
+revoke all on function public.request_sso(text, text, text, text, text, text, text) from public;
+grant usage on schema public to anon;
+grant execute on function public.request_sso(text, text, text, text, text, text, text) to anon, authenticated;
 revoke all on function public.join_project(text) from public;
 grant execute on function public.join_project(text) to authenticated;
 revoke all on function public.project_lot_catalog(uuid) from public;

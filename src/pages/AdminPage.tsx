@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { useAuth } from '../data/auth'
 import { Navigate } from 'react-router-dom'
 import { isAdminEmail } from '../lib/admin'
-import { cx } from '../components/ui'
+import { Segmented, cx } from '../components/ui'
+import AdminSso from './AdminSso'
 
 const REPO = 'https://github.com/baziventillateur/batimatch'
 const SUPABASE = 'https://supabase.com/dashboard/project/uhdanxctslncwwmcziba'
@@ -38,6 +40,7 @@ const GROUPS: { title: string; items: LinkItem[] }[] = [
       { label: 'Éditeur SQL', href: `${SUPABASE}/sql/new`, note: 'Pour relancer schema.sql' },
       { label: 'Tables', href: `${SUPABASE}/editor` },
       { label: 'Utilisateurs inscrits', href: `${SUPABASE}/auth/users` },
+      { label: 'Connexion Microsoft (SSO)', href: `${SUPABASE}/auth/providers`, note: 'Fournisseur « Azure » à activer pour la première entreprise' },
       { label: 'Adresses de redirection (Auth)', href: `${SUPABASE}/auth/url-configuration`, note: 'Site URL et Redirect URLs' },
       { label: 'Stockage des logos', href: `${SUPABASE}/storage/buckets` },
     ],
@@ -48,17 +51,40 @@ const LOCAL_NOTE = 'Dossier de travail : /home/claude/batimatch (session Claude)
 
 export default function AdminPage() {
   const { profile } = useAuth()
+  const [tab, setTab] = useState<'sso' | 'links'>('sso')
+  const [todo, setTodo] = useState(0)
   if (!profile) return null
   if (!isAdminEmail(profile.email)) return <Navigate to="/" replace />
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <header>
-        <h1 className="font-title text-[1.625rem] font-bold">Panneau admin</h1>
-        <p className="mt-1 text-[0.875rem] text-ink-3">Liens utiles pour le projet Batimatch.</p>
+    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <div>
+          <h1 className="font-title text-[1.625rem] leading-tight font-bold">Panneau admin</h1>
+          <p className="text-[0.875rem] text-ink-3">{tab === 'sso' ? 'Demandes de connexion SSO des entreprises.' : 'Liens utiles pour le projet Batimatch.'}</p>
+        </div>
+        <Segmented
+          label="Rubrique"
+          value={tab}
+          onChange={setTab}
+          options={[
+            {
+              value: 'sso',
+              label: (
+                <span className="inline-flex items-center gap-1.5">
+                  Demandes SSO
+                  {todo > 0 && <span className="num grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full bg-bad px-1 text-[0.6875rem] leading-none font-bold text-white">{todo}</span>}
+                </span>
+              ),
+            },
+            { value: 'links', label: 'Liens utiles' },
+          ]}
+        />
       </header>
 
-      {GROUPS.map((g) => (
+      {tab === 'sso' && <AdminSso onCount={setTodo} />}
+
+      {tab === 'links' && GROUPS.map((g) => (
         <section key={g.title} className="overflow-hidden rounded-md border border-line bg-sheet">
           <h2 className="border-b border-line bg-paper/60 px-4 py-2.5 text-[0.875rem] font-semibold">{g.title}</h2>
           <ul>
@@ -82,10 +108,12 @@ export default function AdminPage() {
         </section>
       ))}
 
-      <section className="rounded-md border border-line bg-paper/50 px-4 py-3 text-[0.8125rem] text-ink-3">
-        <h2 className="mb-1 text-[0.875rem] font-semibold text-ink">Projet local</h2>
-        {LOCAL_NOTE}
-      </section>
+      {tab === 'links' && (
+        <section className="rounded-md border border-line bg-paper/50 px-4 py-3 text-[0.8125rem] text-ink-3">
+          <h2 className="mb-1 text-[0.875rem] font-semibold text-ink">Projet local</h2>
+          {LOCAL_NOTE}
+        </section>
+      )}
     </div>
   )
 }

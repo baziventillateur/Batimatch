@@ -1,7 +1,7 @@
 // Backend de démonstration en mémoire (stocké dans le navigateur), qui reproduit
 // les règles d'accès de la base Supabase. Sert au développement et aux tests visuels.
 import type { SignUpInput, Backend, OfferLite } from './backend'
-import type { NotificationRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import type { NotificationRow, SsoRequestRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 import { uid } from '../lib/id'
 
 const files = new Map<string, Blob>()
@@ -21,11 +21,12 @@ interface Db {
   reviews: ReviewRow[]
   comments: CommentRow[]
   notifications: NotificationRow[]
+  sso: SsoRequestRow[]
   session: string | null
 }
 
 const KEY = 'batimatch:mock'
-const empty = (): Db => ({ users: [], profiles: [], projects: [], members: [], lots: [], privates: [], access: [], offers: [], reviews: [], comments: [], notifications: [], session: null })
+const empty = (): Db => ({ users: [], profiles: [], projects: [], members: [], lots: [], privates: [], access: [], offers: [], reviews: [], comments: [], notifications: [], sso: [], session: null })
 
 function load(): Db {
   try {
@@ -353,6 +354,51 @@ export function createMockBackend(): Backend {
     async markNotificationsRead(ids) {
       for (const n of db.notifications) if (ids.includes(n.id) && n.user_id === db.session && !n.read_at) n.read_at = now()
       save()
+    },
+    // SSO : en démo, les demandes restent dans le navigateur et aucun e-mail ne part
+    async requestSso(i) {
+      const email = i.email.trim().toLowerCase()
+      if (db.sso.some((r) => r.email === email)) return delay(undefined)
+      const id = uid()
+      db.sso.push({
+        id,
+        company_name: i.company.trim(),
+        contact_name: i.contact.trim(),
+        email,
+        phone: i.phone.trim(),
+        user_count: i.users,
+        provider: i.provider,
+        message: i.message.trim(),
+        status: 'new',
+        admin_note: '',
+        created_at: now(),
+        updated_at: now(),
+        messages: [{ id: uid(), request_id: id, kind: 'ack', subject: '', body: '', emailed_at: now(), created_at: now() }],
+      })
+      save()
+      await delay(null)
+    },
+    async listSsoRequests() {
+      return delay(clone(db.sso).sort((a, b) => b.created_at.localeCompare(a.created_at)))
+    },
+    async updateSsoRequest(id, patch) {
+      const r = db.sso.find((x) => x.id === id)
+      if (r) Object.assign(r, patch, { updated_at: now() })
+      save()
+      await delay(null)
+    },
+    async sendSsoReply(requestId, subject, body) {
+      const r = db.sso.find((x) => x.id === requestId)
+      if (!r) throw new Error('Demande introuvable.')
+      r.messages.push({ id: uid(), request_id: requestId, kind: 'reply', subject: subject.trim(), body: body.trim(), emailed_at: now(), created_at: now() })
+      if (r.status === 'new') r.status = 'contacted'
+      save()
+      await delay(null)
+    },
+    async deleteSsoRequest(id) {
+      db.sso = db.sso.filter((x) => x.id !== id)
+      save()
+      await delay(null)
     },
     async getLot(id) {
       const lot = db.lots.find((l) => l.id === id)

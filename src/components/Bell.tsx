@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell as BellIcon, Check, CircleSlash, KeyRound, UserPlus, X } from 'lucide-react'
+import { Bell as BellIcon, Check, CircleSlash, KeyRound, ShieldCheck, UserPlus, X } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import type { NotificationRow } from '../data/rows'
 import { Button, IconButton, cx } from './ui'
@@ -97,12 +97,14 @@ export function Bell() {
   }
 
   const go = (n: NotificationRow) => {
-    if (!n.project_id) return
+    const sso = n.kind === 'sso_requested'
+    if (!n.project_id && !sso) return
     setOpen(false)
     if (!n.read_at && !actionable(n)) {
       setItems((xs) => xs.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)))
       api.markNotificationsRead([n.id]).catch(() => {})
     }
+    if (sso) return nav('/admin')
     nav(n.kind === 'access_approved' && n.lot_id ? `/p/${n.project_id}/l/${n.lot_id}` : `/p/${n.project_id}`)
   }
 
@@ -152,6 +154,7 @@ function Item({ n, busy, onOpen, onDecide }: { n: NotificationRow; busy: boolean
     access_requested: { icon: <UserPlus size={16} />, tone: 'bg-warn-soft text-warn', text: <><strong className="font-semibold">{company}</strong> demande l’accès au lot <strong className="font-semibold">{lot}</strong></> },
     access_approved: { icon: <KeyRound size={16} />, tone: 'bg-good-soft text-good', text: <>Votre accès au lot <strong className="font-semibold">{lot}</strong> est accepté. Vous pouvez répondre.</> },
     access_refused: { icon: <X size={16} />, tone: 'bg-bad-soft text-bad', text: <>Votre demande d’accès au lot <strong className="font-semibold">{lot}</strong> n’a pas été retenue.</> },
+    sso_requested: { icon: <ShieldCheck size={16} />, tone: 'bg-plan-soft text-plan', text: <><strong className="font-semibold">{company}</strong> demande la connexion SSO</> },
     lot_declined: { icon: <CircleSlash size={16} />, tone: 'bg-paper text-ink-2', text: <><strong className="font-semibold">{company}</strong> ne répondra pas au lot <strong className="font-semibold">{lot}</strong></> },
   }[n.kind]
   return (
@@ -162,7 +165,7 @@ function Item({ n, busy, onOpen, onDecide }: { n: NotificationRow; busy: boolean
           <span className="block text-[0.875rem] leading-snug">{view.text}</span>
           {n.kind === 'lot_declined' && d.comment && <span className="mt-0.5 block text-[0.8125rem] leading-snug text-ink-2 italic">« {d.comment} »</span>}
           <span className="mt-0.5 block text-[0.75rem] text-ink-3">
-            {[d.project, n.kind === 'access_requested' && d.contact, ago(n.created_at)].filter(Boolean).join(', ')}
+            {[d.project, (n.kind === 'access_requested' || n.kind === 'sso_requested') && d.contact, ago(n.created_at)].filter(Boolean).join(', ')}
           </span>
         </span>
         {!n.read_at && <span className="mt-2 size-2 shrink-0 rounded-full bg-plan" aria-label="Non lue" />}
