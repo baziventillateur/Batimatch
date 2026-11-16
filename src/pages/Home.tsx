@@ -222,7 +222,7 @@ function ProjectFormBody({
       }}
     >
       <Field label="Nom du projet" htmlFor="pr-name">
-        <input id="pr-name" className="field" required autoFocus placeholder="Ex. Logements Paris 17e – Résidence des Tilleuls" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        <input id="pr-name" className="field" required autoFocus placeholder="Ex. Logements Paris 17e" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
       </Field>
       <Field label="Référence de l’affaire" htmlFor="pr-ref">
         <input id="pr-ref" className="field" placeholder="Ex. 24-017" value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
