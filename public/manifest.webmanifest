@@ -1,0 +1,18 @@
+{
+  "name": "Batimatch · Comparatif d'offres BTP",
+  "short_name": "Batimatch",
+  "description": "Batimatch : créez un DPGF, saisissez les offres des entreprises et comparez-les pour décider.",
+  "lang": "fr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1B2A3A",
+  "theme_color": "#1B2A3A",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
