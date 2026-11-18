@@ -35,6 +35,8 @@ export interface ProjectRow {
   description: string
   access_code: string
   created_at: string
+  /** Projet exemple (copie du modèle proposé à chaque acheteur) */
+  is_example?: boolean
 }
 
 /** draft = invisible des entreprises ; published = ouvert ; suspended = visible mais gelé */
@@ -231,6 +233,7 @@ export const toProject = (r: ProjectRow): Project => ({
   description: r.description ?? '',
   accessCode: r.access_code,
   createdAt: r.created_at,
+  isExample: !!r.is_example,
 })
 
 export const toOffer = (r: OfferRow): Offer => ({

@@ -6,13 +6,16 @@ import assert from 'node:assert/strict'
 
 const db = new PGlite()
 const schema = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8')
+const example = readFileSync(new URL('../example.sql', import.meta.url), 'utf8')
 
 // — Simulation minimale de Supabase : rôles, auth.users, auth.uid(), stockage —
 await db.exec(`
   create role anon nologin;
   create role authenticated nologin;
   create schema auth;
-  create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', email_confirmed_at timestamptz default now());
+  create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}', email_confirmed_at timestamptz default now(),
+    instance_id uuid, aud text, role text, encrypted_password text, raw_app_meta_data jsonb, created_at timestamptz, updated_at timestamptz,
+    banned_until timestamptz, confirmation_token text, recovery_token text, email_change_token_new text, email_change text);
   create function auth.uid() returns uuid language sql stable as $$
     select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   grant usage on schema auth to authenticated, anon;
@@ -263,5 +266,55 @@ await fails(A, `update public.sso_requests set email = 'autre@x.fr' where id = '
 await as(A, `delete from public.sso_requests where id = $1`, [rid])
 assert.equal((await as(A, `select * from public.sso_messages`)).rows.length, 0)
 console.log('✓ demandes SSO : dépôt sans compte encadré, traitement réservé à l’administrateur')
+
+// Projet exemple : copie du modèle dans le compte de l'acheteur, sans alerte ni accès pour les autres
+await fails(B, `select public.open_example_project()`, 'exemple avant installation du modèle')
+await db.exec(example)
+await db.exec(example) // relançable
+const demoAccounts = (await db.query(`select id, banned_until, encrypted_password from auth.users where email like '%.example'`)).rows
+assert.ok(demoAccounts.length >= 10 && demoAccounts.every((u) => u.banned_until > new Date('2900-01-01') && u.encrypted_password === ''), 'comptes fictifs bloqués')
+await fails(C1, `select public.open_example_project()`, 'exemple ouvert par une entreprise')
+const notifBefore = (await db.query(`select count(*)::int as n from public.notifications`)).rows[0].n
+const ex = (await as(B, `select public.open_example_project() as id`)).rows[0].id
+assert.equal((await as(B, `select public.open_example_project() as id`)).rows[0].id, ex, 'un seul exemple par acheteur')
+const exProject = (await as(B, `select * from public.projects where id = $1`, [ex])).rows[0]
+assert.equal(exProject.is_example, true)
+assert.equal(exProject.owner_id, B)
+const exLots = (await as(B, `select id, status, due_date from public.lots where project_id = $1`, [ex])).rows
+assert.ok(exLots.length >= 5, 'au moins 5 lots')
+const exIds = exLots.map((l) => l.id)
+const exOffers = (await as(B, `select * from public.offers where lot_id = any($1)`, [exIds])).rows
+assert.ok(exOffers.length >= 8, 'offres visibles de l’acheteur')
+assert.ok(exOffers.some((o) => o.source === 'manual') && exOffers.some((o) => o.source === 'platform'))
+const exAccess = (await as(B, `select status from public.lot_access where lot_id = any($1)`, [exIds])).rows.map((a) => a.status)
+for (const st of ['pending', 'approved', 'refused', 'declined']) assert.ok(exAccess.includes(st), `accès « ${st} » présent`)
+const awarded = (await as(B, `select awarded_offer_id from public.lot_private where lot_id = any($1) and awarded_offer_id is not null`, [exIds])).rows
+assert.equal(awarded.length, 1)
+assert.ok(exOffers.some((o) => o.id === awarded[0].awarded_offer_id), 'offre retenue présente')
+assert.ok((await as(B, `select * from public.offer_reviews where lot_id = any($1)`, [exIds])).rows.length > 0)
+assert.ok((await as(B, `select * from public.offer_comments where lot_id = any($1)`, [exIds])).rows.length > 0)
+const exMembers = (await as(B, `select m.user_id, p.logo_url from public.project_members m join public.profiles p on p.id = m.user_id where m.project_id = $1`, [ex])).rows
+assert.ok(exMembers.length >= 10 && exMembers.every((m) => m.logo_url?.startsWith('exemple/logos/')), 'entreprises visibles avec leur logo')
+// Accepter la demande en attente ne crée ni alerte ni e-mail
+const pendingRow = (await as(B, `select lot_id, user_id from public.lot_access where lot_id = any($1) and status = 'pending'`, [exIds])).rows[0]
+await as(B, `update public.lot_access set status = 'approved', decided_at = now() where lot_id = $1 and user_id = $2`, [pendingRow.lot_id, pendingRow.user_id])
+assert.equal((await db.query(`select count(*)::int as n from public.notifications`)).rows[0].n, notifBefore, 'aucune alerte pour l’exemple')
+// Les autres comptes ne voient rien, et le code du projet exemple ne permet pas de le rejoindre
+assert.equal((await as(C1, `select * from public.projects where id = $1`, [ex])).rows.length, 0)
+assert.equal((await as(C2, `select * from public.offers where lot_id = any($1)`, [exIds])).rows.length, 0)
+await fails(C1, `select public.join_project('${exProject.access_code}')`, 'rejoindre un projet exemple')
+await fails(B, `select * from public.example_template`, 'lecture directe du modèle')
+const B2 = '55555555-5555-5555-5555-555555555555'
+await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${B2}', 'acheteur2@test.fr', '{"role":"buyer"}')`)
+const ex2 = (await as(B2, `select public.open_example_project() as id`)).rows[0].id
+assert.notEqual(ex2, ex)
+assert.equal((await as(B2, `select * from public.projects where id = $1`, [ex])).rows.length, 0, 'exemple d’un autre acheteur invisible')
+assert.equal((await as(B2, `select * from public.offers where lot_id = any($1)`, [exIds])).rows.length, 0)
+// Supprimer l'exemple puis le rouvrir en donne un neuf
+await as(B, `delete from public.projects where id = $1`, [ex])
+const ex3 = (await as(B, `select public.open_example_project() as id`)).rows[0].id
+assert.notEqual(ex3, ex)
+assert.equal((await as(B, `select count(*)::int as n from public.lot_access where status = 'pending' and lot_id in (select id from public.lots where project_id = $1)`, [ex3])).rows[0].n, 1)
+console.log('✓ projet exemple : copie privée par acheteur, comptes fictifs bloqués, aucune alerte')
 
 console.log('\nTous les tests de sécurité passent.')

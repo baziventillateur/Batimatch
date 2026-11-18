@@ -159,6 +159,9 @@ export function createSupabaseBackend(): Backend {
     async removeMember(projectId, userId) {
       check(await sb.from('project_members').delete().eq('project_id', projectId).eq('user_id', userId))
     },
+    async openExampleProject() {
+      return check(await sb.rpc('open_example_project')) as string
+    },
 
     async createLot(input) {
       return check(await sb.from('lots').insert(input).select('*').single()) as LotRow

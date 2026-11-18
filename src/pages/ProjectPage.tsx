@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { REFRESH_EVENT } from '../components/Bell'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Check, ChevronLeft, Clock, Copy, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, Send, Share2, Trash2, UserMinus, X } from 'lucide-react'
+import { Check, ChevronLeft, Clock, Copy, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, UserMinus, X } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import { useAuth } from '../data/auth'
 import type { ProjectBundle } from '../data/backend'
@@ -105,7 +105,7 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
         </dl>
       </section>
 
-      <InvitePanel code={b.project.access_code} projectName={b.project.name} />
+      {b.project.is_example ? <ExampleBanner projectId={b.project.id} /> : <InvitePanel code={b.project.access_code} projectName={b.project.name} />}
 
       <AccessRequests b={b} reload={reload} />
 
@@ -150,6 +150,37 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
         onCreated={(id) => nav(`/p/${b.project.id}/l/${id}/dpgf`)}
       />
     </div>
+  )
+}
+
+/** Projet exemple : à la place du code d'invitation, qui ne sert à rien ici */
+function ExampleBanner({ projectId }: { projectId: string }) {
+  const nav = useNavigate()
+  const [busy, setBusy] = useState(false)
+  const reset = async () => {
+    if (!confirm('Repartir d’un projet exemple neuf ? Vos modifications sur celui-ci seront perdues.')) return
+    setBusy(true)
+    try {
+      await api.deleteProject(projectId)
+      nav(`/p/${await api.openExampleProject()}`, { replace: true })
+    } catch (e) {
+      alert(errorMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section className="flex items-start gap-2.5 rounded-md border border-plan/25 bg-plan-soft px-3.5 py-2.5 sm:px-5" aria-label="Projet exemple">
+      <Sparkles size={17} className="mt-0.5 shrink-0 text-plan" />
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+        <p className="min-w-0 flex-1 basis-[16rem] text-[0.875rem]">
+          <strong className="font-semibold">Projet exemple</strong> : entreprises et montants fictifs, rien n’est envoyé. Acceptez, notez, attribuez librement.
+        </p>
+        <Button size="sm" variant="ghost" className="-ml-2 sm:ml-0" icon={busy ? <Spinner /> : <RotateCcw size={14} />} disabled={busy} onClick={reset}>
+          Repartir de zéro
+        </Button>
+      </div>
+    </section>
   )
 }
 

@@ -88,6 +88,9 @@ create table if not exists public.projects (
   updated_at timestamptz not null default now()
 );
 
+-- Projet exemple : copie du modèle proposé à chaque acheteur (voir open_example_project plus bas)
+alter table public.projects add column if not exists is_example boolean not null default false;
+
 create or replace function public.set_access_code()
 returns trigger
 language plpgsql
@@ -195,6 +198,10 @@ declare
 begin
   select * into v_lot from public.lots where id = new.lot_id;
   select * into v_project from public.projects where id = v_lot.project_id;
+  -- Projet exemple : les entreprises sont fictives, aucune alerte ni aucun e-mail
+  if v_project.is_example then
+    return new;
+  end if;
   select * into v_company from public.profiles where id = new.user_id;
   v_data := jsonb_build_object(
     'project', v_project.name,
@@ -600,7 +607,8 @@ begin
   if auth.uid() is null then
     raise exception 'Connectez-vous pour rejoindre un projet.';
   end if;
-  select id into v_project from public.projects where access_code = upper(replace(trim(p_code), ' ', ''));
+  select id into v_project from public.projects
+  where access_code = upper(replace(trim(p_code), ' ', '')) and not is_example;
   if v_project is null then
     raise exception 'Code inconnu : vérifiez le code transmis par l''acheteur.';
   end if;
@@ -608,6 +616,103 @@ begin
     insert into public.project_members (project_id, user_id) values (v_project, auth.uid())
     on conflict do nothing;
   end if;
+  return v_project;
+end;
+$$;
+
+-- ─── Projet exemple ─────────────────────────────────────────────────────────
+-- Un modèle unique (rempli par supabase/example.sql, généré depuis src/lib/example.ts) que chaque acheteur
+-- peut copier dans son compte avec le bouton « Projet exemple ». Les entreprises du modèle ont des comptes
+-- bloqués : personne ne peut s'y connecter. Les dates du modèle sont des décalages en jours, appliqués
+-- au jour de la copie. Le modèle n'est lisible que par la fonction.
+create table if not exists public.example_template (
+  id integer primary key default 1 check (id = 1),
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.open_example_project()
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_now timestamptz := now();
+  v_today date := (now() at time zone 'Europe/Paris')::date;
+  v_project uuid;
+  v_lot uuid;
+  t jsonb;
+  l jsonb;
+begin
+  if v_uid is null then
+    raise exception 'Connectez-vous pour ouvrir le projet exemple.';
+  end if;
+  if not exists (select 1 from public.profiles where id = v_uid and role = 'buyer') then
+    raise exception 'example_buyer_only';
+  end if;
+  -- Un seul exemple par acheteur, même si le bouton est cliqué deux fois de suite
+  perform pg_advisory_xact_lock(hashtext('batimatch-example:' || v_uid::text));
+  select id into v_project from public.projects where owner_id = v_uid and is_example order by created_at desc limit 1;
+  if v_project is not null then
+    return v_project;
+  end if;
+  select data into t from public.example_template where id = 1;
+  if t is null then
+    raise exception 'example_missing';
+  end if;
+
+  insert into public.projects (owner_id, name, reference, description, is_example)
+  values (v_uid, t -> 'project' ->> 'name', t -> 'project' ->> 'reference', t -> 'project' ->> 'description', true)
+  returning id into v_project;
+
+  insert into public.project_members (project_id, user_id, joined_at)
+  select v_project, (m ->> 'user_id')::uuid, v_now + make_interval(days => (m ->> 'joined')::int)
+  from jsonb_array_elements(t -> 'members') m;
+
+  -- Identifiants dérivés du projet : les liens entre offres, évaluations et attribution restent cohérents
+  for l in select * from jsonb_array_elements(t -> 'lots') loop
+    v_lot := md5(v_project::text || ':lot:' || (l ->> 'key'))::uuid;
+
+    insert into public.lots (id, project_id, name, code, description, due_date, status, items, position, created_at, updated_at)
+    values (v_lot, v_project, l ->> 'name', l ->> 'code', l ->> 'description', v_today + (l ->> 'due')::int,
+            l ->> 'status', l -> 'items', (l ->> 'position')::int, v_now - interval '45 days', v_now - interval '45 days');
+
+    insert into public.lot_private (lot_id, budget, budget_prices, settings, awarded_offer_id)
+    values (v_lot, (l ->> 'budget')::numeric, l -> 'budget_prices', l -> 'settings',
+            case when l ->> 'awarded' is not null then md5(v_project::text || ':offer:' || (l ->> 'awarded'))::uuid end);
+
+    insert into public.lot_access (lot_id, user_id, status, requested_at, decided_at, comment)
+    select v_lot, (a ->> 'user_id')::uuid, a ->> 'status', v_now + make_interval(days => (a ->> 'requested')::int),
+           case when a ->> 'decided' is not null then v_now + make_interval(days => (a ->> 'decided')::int) end,
+           a ->> 'comment'
+    from jsonb_array_elements(l -> 'access') a;
+
+    insert into public.offers (id, lot_id, company_id, source, status, version, company_name, contact_first_name,
+                               contact_last_name, contact_email, contact_phone, logo_url, received_at, prices,
+                               discount_pct, extras, duration_weeks, valid_until, reserves, message, submitted_at,
+                               created_at, updated_at)
+    select md5(v_project::text || ':offer:' || (o ->> 'key'))::uuid, v_lot, (o ->> 'company_id')::uuid, o ->> 'source',
+           'submitted', (o ->> 'version')::int, o ->> 'company_name', o ->> 'contact_first_name', o ->> 'contact_last_name',
+           o ->> 'contact_email', o ->> 'contact_phone', o ->> 'logo_url', v_today + (o ->> 'received')::int, o -> 'prices',
+           coalesce((o ->> 'discount_pct')::numeric, 0), o -> 'extras', (o ->> 'duration_weeks')::numeric,
+           case when o ->> 'valid' is not null then v_today + (o ->> 'valid')::int end,
+           o ->> 'reserves', o ->> 'message',
+           case when o ->> 'source' = 'platform' then v_now + make_interval(days => (o ->> 'received')::int) end,
+           v_now + make_interval(days => (o ->> 'received')::int), v_now + make_interval(days => (o ->> 'received')::int)
+    from jsonb_array_elements(l -> 'offers') o;
+
+    insert into public.offer_reviews (offer_id, lot_id, scores, verdict)
+    select md5(v_project::text || ':offer:' || (r ->> 'offer'))::uuid, v_lot, r -> 'scores', r ->> 'verdict'
+    from jsonb_array_elements(l -> 'reviews') r;
+
+    insert into public.offer_comments (offer_id, lot_id, author_id, body, created_at)
+    select md5(v_project::text || ':offer:' || (c ->> 'offer'))::uuid, v_lot, v_uid, c ->> 'body',
+           v_now + make_interval(days => (c ->> 'at')::int)
+    from jsonb_array_elements(l -> 'comments') c;
+  end loop;
+
   return v_project;
 end;
 $$;
@@ -625,6 +730,7 @@ alter table public.sso_messages enable row level security;
 alter table public.offers enable row level security;
 alter table public.offer_reviews enable row level security;
 alter table public.offer_comments enable row level security;
+alter table public.example_template enable row level security; -- aucune règle : lu seulement par open_example_project()
 
 -- On repart de règles propres à chaque exécution
 do $$
@@ -783,6 +889,9 @@ grant usage on schema public to anon;
 grant execute on function public.request_sso(text, text, text, text, text, text, text) to anon, authenticated;
 revoke all on function public.join_project(text) from public;
 grant execute on function public.join_project(text) to authenticated;
+revoke all on public.example_template from authenticated, anon;
+revoke all on function public.open_example_project() from public, anon;
+grant execute on function public.open_example_project() to authenticated;
 revoke all on function public.project_lot_catalog(uuid) from public;
 grant execute on function public.project_lot_catalog(uuid) to authenticated;
 

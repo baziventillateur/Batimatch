@@ -4,7 +4,6 @@ import { ArrowRight, KeyRound, Plus, Sparkles } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import { pendingCode, useAuth } from '../data/auth'
 import type { ProjectListItem } from '../data/backend'
-import { seedDemoProject } from '../data/seed'
 import { daysUntil, fmtDate } from '../lib/format'
 import { Button, Dialog, EmptyState, ErrorBox, Field, Loading, Spinner, cx } from '../components/ui'
 
@@ -39,8 +38,7 @@ function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; 
   const demo = async () => {
     setSeeding(true)
     try {
-      const { projectId, lotId } = await seedDemoProject()
-      nav(`/p/${projectId}/l/${lotId}/decision`)
+      nav(`/p/${await api.openExampleProject()}`)
     } catch (e) {
       alert(errorMessage(e))
     } finally {
@@ -58,7 +56,7 @@ function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; 
         <div className="flex flex-wrap gap-2">
           {!!items?.length && (
             <Button variant="ghost" icon={seeding ? <Spinner /> : <Sparkles size={16} />} disabled={seeding} onClick={demo}>
-              Projet d’exemple
+              Projet exemple
             </Button>
           )}
           <Button variant="primary" icon={<Plus size={18} />} onClick={() => setCreating(true)}>
@@ -93,7 +91,7 @@ function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; 
                 Créer mon premier projet
               </Button>
               <Button icon={seeding ? <Spinner /> : <Sparkles size={16} />} disabled={seeding} onClick={demo}>
-                Voir un projet d’exemple
+                Explorer le projet exemple
               </Button>
             </div>
           </div>
@@ -139,9 +137,14 @@ function ProjectCard({ it }: { it: ProjectListItem }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="truncate text-[1.1875rem] font-semibold">{it.project.name}</h3>
-            <p className="truncate text-[0.8438rem] text-ink-3">{it.project.reference || 'Sans référence'}</p>
+            <p className="truncate text-[0.8438rem] text-ink-3">
+              {it.project.is_example && <span className="mr-1.5 rounded-[3px] bg-plan-soft px-1.5 py-px text-[0.75rem] font-semibold text-plan">Exemple</span>}
+              {it.project.reference || 'Sans référence'}
+            </p>
           </div>
-          <span className="num shrink-0 rounded-[4px] border border-ink/70 px-2 py-0.5 text-[0.8125rem] font-semibold tracking-[0.12em]">{it.project.access_code}</span>
+          {!it.project.is_example && (
+            <span className="num shrink-0 rounded-[4px] border border-ink/70 px-2 py-0.5 text-[0.8125rem] font-semibold tracking-[0.12em]">{it.project.access_code}</span>
+          )}
         </div>
         <dl className="grid grid-cols-3 gap-3 text-[0.875rem]">
           <div>

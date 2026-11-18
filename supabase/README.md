@@ -10,6 +10,11 @@
 
 Le script peut être relancé sans risque après une mise à jour : il ne supprime aucune donnée.
 
+Ensuite, même chose avec [`example.sql`](./example.sql) : il installe le **projet exemple** (17 entreprises fictives
+aux comptes bloqués, et le modèle que chaque acheteur copie avec le bouton « Projet exemple »). Ce fichier est généré
+depuis `src/lib/example.ts` : pour modifier l'exemple, changez ce fichier, lancez `npx vitest run -u`, puis relancez
+`example.sql`. Les exemples déjà ouverts ne changent pas ; « Repartir de zéro » donne la nouvelle version.
+
 ## 2. Régler l'authentification
 
 **Authentication → URL Configuration**

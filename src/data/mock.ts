@@ -3,6 +3,7 @@
 import type { SignUpInput, Backend, OfferLite } from './backend'
 import type { NotificationRow, SsoRequestRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 import { uid } from '../lib/id'
+import { EXAMPLE_ACCOUNTS, buildExampleTemplate, materializeExample } from '../lib/example'
 
 const files = new Map<string, Blob>()
 /** En démo aucun email ne part : le code de connexion est toujours le même */
@@ -53,7 +54,8 @@ export function createMockBackend(): Backend {
     const l = db.lots.find((x) => x.id === lotId)
     const p = db.projects.find((x) => x.id === l?.project_id)
     const c = db.profiles.find((x) => x.id === companyId)
-    if (!l || !p) return
+    // Projet exemple : entreprises fictives, aucune alerte
+    if (!l || !p || p.is_example) return
     db.notifications.push({
       id: uid(),
       user_id: toOwner ? p.owner_id : companyId,
@@ -228,6 +230,7 @@ export function createMockBackend(): Backend {
       db.projects = db.projects.filter((p) => p.id !== id)
       db.members = db.members.filter((m) => m.project_id !== id)
       db.lots = db.lots.filter((l) => !lots.has(l.id))
+      db.access = db.access.filter((a) => !lots.has(a.lot_id))
       db.privates = db.privates.filter((p) => !lots.has(p.lot_id))
       db.offers = db.offers.filter((o) => !lots.has(o.lot_id))
       db.reviews = db.reviews.filter((r) => !lots.has(r.lot_id))
@@ -271,7 +274,7 @@ export function createMockBackend(): Backend {
     },
     async joinProject(c) {
       const uidMe = me()
-      const p = db.projects.find((x) => x.access_code === c.trim().toUpperCase().replace(/\s/g, ''))
+      const p = db.projects.find((x) => x.access_code === c.trim().toUpperCase().replace(/\s/g, '') && !x.is_example)
       if (!p) throw new Error('Code inconnu : vérifiez le code transmis par l’acheteur.')
       if (p.owner_id !== uidMe && !isMember(p.id)) db.members.push({ project_id: p.id, user_id: uidMe, joined_at: now() })
       save()
@@ -281,6 +284,34 @@ export function createMockBackend(): Backend {
       if (!(isOwner(projectId) || userId === db.session)) deny()
       db.members = db.members.filter((m) => !(m.project_id === projectId && m.user_id === userId))
       save()
+    },
+    async openExampleProject() {
+      const uidMe = me()
+      if (db.profiles.find((p) => p.id === uidMe)?.role !== 'buyer') throw new Error('example_buyer_only')
+      const existing = db.projects.filter((p) => p.owner_id === uidMe && p.is_example).sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+      if (existing) return delay(existing.id)
+      // Entreprises fictives : un profil, mais aucun compte de connexion
+      for (const c of EXAMPLE_ACCOUNTS) {
+        if (db.profiles.some((p) => p.id === c.id)) continue
+        db.profiles.push({ id: c.id, role: 'company', email: c.email, first_name: c.first_name, last_name: c.last_name, company_name: c.company_name, phone: c.phone, logo_url: c.logo_url })
+      }
+      const ids = new Map<string, string>()
+      const r = materializeExample(buildExampleTemplate(), {
+        ownerId: uidMe,
+        projectId: uid(),
+        accessCode: code(),
+        id: (k) => ids.get(k) ?? (ids.set(k, uid()), ids.get(k)!),
+      })
+      db.projects.push(r.project)
+      db.members.push(...r.members)
+      db.lots.push(...r.lots)
+      db.privates.push(...r.privates)
+      db.access.push(...r.access)
+      db.offers.push(...r.offers)
+      db.reviews.push(...r.reviews)
+      db.comments.push(...r.comments)
+      save()
+      return delay(r.project.id)
     },
 
     async createLot(input) {

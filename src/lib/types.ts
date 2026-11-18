@@ -23,6 +23,8 @@ export interface Project {
   description: string
   accessCode: string
   createdAt: string
+  /** Projet exemple : entreprises et montants fictifs */
+  isExample?: boolean
 }
 
 export type ItemKind = 'chapter' | 'line'

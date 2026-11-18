@@ -75,6 +75,8 @@ export interface Backend {
   getProject(id: string): Promise<ProjectBundle>
   joinProject(code: string): Promise<string>
   removeMember(projectId: string, userId: string): Promise<void>
+  /** Acheteur : ouvre son projet exemple, en le créant à partir du modèle s'il n'en a pas encore */
+  openExampleProject(): Promise<string>
   // Lots
   createLot(input: Pick<LotRow, 'project_id' | 'name' | 'code' | 'due_date' | 'description' | 'items' | 'position'> & { id?: string; status?: LotStatus }): Promise<LotRow>
   updateLot(id: string, patch: Partial<Pick<LotRow, 'name' | 'code' | 'description' | 'due_date' | 'items' | 'position' | 'status'>>): Promise<void>
@@ -121,7 +123,9 @@ export function errorMessage(e: unknown): string {
   if (/sso_busy/.test(raw)) return 'Trop de demandes en ce moment. Réessayez dans une heure ou écrivez à contact@paceapp.fr.'
   if (/sso_email/.test(raw)) return 'Cette adresse e-mail ne semble pas valide.'
   if (/sso_company|sso_contact/.test(raw)) return 'Indiquez le nom de l’entreprise et celui du contact.'
-  if (/lot_access|notifications|sso_requests|sso_messages|request_sso|tech_note|offer-files|Bucket not found|project_lot_catalog|column .*status.* does not exist|schema cache/i.test(raw)) return 'La base de données doit être mise à jour : relancez supabase/schema.sql dans l’éditeur SQL de Supabase.'
+  if (/example_buyer_only/.test(raw)) return 'Le projet exemple est réservé aux comptes acheteurs.'
+  if (/example_missing/.test(raw)) return 'Le projet exemple n’est pas encore installé : exécutez supabase/example.sql dans l’éditeur SQL de Supabase.'
+  if (/open_example_project|is_example|lot_access|notifications|sso_requests|sso_messages|request_sso|tech_note|offer-files|Bucket not found|project_lot_catalog|column .*status.* does not exist|schema cache/i.test(raw)) return 'La base de données doit être mise à jour : relancez supabase/schema.sql dans l’éditeur SQL de Supabase.'
   if (/signups not allowed/i.test(raw)) return 'Aucun compte avec cet email. Créez un compte.'
   if (/token has expired|otp_expired|invalid.*otp|otp.*invalid/i.test(raw)) return 'Code incorrect ou expiré. Vérifiez-le ou demandez-en un nouveau.'
   if (/security purposes/i.test(raw)) return 'Patientez une minute avant de redemander un code.'
