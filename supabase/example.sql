@@ -1372,7 +1372,7 @@ values (1, $exemple${
    "name": "Plâtrerie, isolation, faux plafonds",
    "code": "Lot 07 – Plâtrerie",
    "status": "published",
-   "due": 12,
+   "due": 2,
    "position": 4,
    "description": "Doublages, cloisons, faux plafonds et gaines techniques des logements et des parties communes.",
    "items": [

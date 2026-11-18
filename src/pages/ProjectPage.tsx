@@ -118,6 +118,15 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
             Nouveau lot
           </Button>
         </div>
+        {b.lots.length > 0 && (
+          <p className="-mt-1 flex flex-wrap gap-x-3.5 gap-y-1 text-[0.75rem] text-ink-3" aria-label="Légende des états">
+            {(['live', 'soon', 'late', 'draft', 'closed'] as const).map((k) => (
+              <span key={k} className="inline-flex items-center gap-1.5">
+                <span className={cx('signal', SIGNALS[k].dot, '!animate-none after:!animate-none')} aria-hidden="true" /> {SIGNALS[k].label}
+              </span>
+            ))}
+          </p>
+        )}
         {b.lots.length === 0 ? (
           <EmptyState title="Aucun lot" action={<Button variant="primary" onClick={() => setAddingLot(true)}>Créer le premier lot</Button>}>
             Créez un lot par corps d’état : sa DPGF, sa date de rendu et son budget objectif (que les entreprises ne voient pas). Un lot reste invisible tant que vous ne le publiez pas.
@@ -198,6 +207,37 @@ export function LotStatusPill({ status }: { status: LotStatus }) {
   )
 }
 
+/** État d'un lot, lu d'un coup d'œil : un voyant, une couleur, un libellé */
+type LotSignalKind = 'draft' | 'suspended' | 'live' | 'soon' | 'late' | 'closed' | 'awarded'
+const SIGNALS: Record<LotSignalKind, { label: string; dot: string; text: string; bar: string; help: string }> = {
+  live: { label: 'En ligne', dot: 'signal-live', text: 'text-good', bar: 'bg-good', help: 'Publié, les entreprises peuvent répondre' },
+  soon: { label: 'Remise proche', dot: 'signal-soon', text: 'text-warn', bar: 'bg-[#e08a00]', help: 'En ligne, remise dans 3 jours ou moins' },
+  late: { label: 'Clôturé sans offre', dot: 'signal-late', text: 'text-bad', bar: 'bg-bad', help: 'Date de remise passée, aucune offre reçue : repoussez la date ou relancez' },
+  suspended: { label: 'Suspendu', dot: 'signal-soon !shadow-none after:!animate-none', text: 'text-warn', bar: 'bg-[#e08a00]/50', help: 'Visible des entreprises, réponses gelées' },
+  draft: { label: 'Brouillon', dot: 'signal-draft', text: 'text-ink-2', bar: 'bg-transparent', help: 'Pas encore publié : invisible des entreprises' },
+  closed: { label: 'Clôturé', dot: 'signal-off', text: 'text-ink-3', bar: 'bg-line', help: 'Date de remise passée, offres à analyser' },
+  awarded: { label: 'Attribué', dot: 'signal-off', text: 'text-ink-3', bar: 'bg-line', help: 'Offre retenue' },
+}
+const SOON_DAYS = 3
+
+function lotSignal(status: LotStatus, days: number | null, offers: number, awarded: boolean): LotSignalKind {
+  if (awarded) return 'awarded'
+  if (status === 'draft') return 'draft'
+  if (days != null && days < 0) return offers ? 'closed' : 'late'
+  if (status === 'suspended') return 'suspended'
+  return days != null && days <= SOON_DAYS ? 'soon' : 'live'
+}
+
+function LotSignal({ kind, className }: { kind: LotSignalKind; className?: string }) {
+  const s = SIGNALS[kind]
+  return (
+    <span className={cx('inline-flex shrink-0 items-center gap-1.5 text-[0.8125rem] font-semibold', s.text, className)} title={s.help}>
+      {kind === 'awarded' ? <Check size={13} strokeWidth={3} /> : <span className={cx('signal', s.dot)} aria-hidden="true" />}
+      {s.label}
+    </span>
+  )
+}
+
 function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload: () => void }) {
   const lot = b.lots.find((l) => l.id === lotId)!
   const status: LotStatus = lot.status ?? 'published'
@@ -229,22 +269,25 @@ function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload:
   }, [offers, lot.items])
   const budget = priv?.budget != null ? Number(priv.budget) : null
   const companies = [...new Map(offers.map((o) => [o.company_name.toLowerCase(), o])).values()]
+  const signal = lotSignal(status, days, offers.length, !!priv?.awarded_offer_id && offers.some((o) => o.id === priv.awarded_offer_id))
+  const dim = signal === 'closed' || signal === 'awarded'
 
   return (
-    <li className="border-b border-line-2 last:border-0">
+    <li className={cx('relative border-b border-line-2 last:border-0', signal === 'draft' && 'bg-paper/50', signal === 'late' && 'bg-bad-soft/30')}>
+      <span className={cx('absolute inset-y-0 left-0 w-[3px]', SIGNALS[signal].bar, signal === 'draft' && 'border-l-[3px] border-dashed border-ink-3/60')} aria-hidden="true" />
       <Link
         to={`/p/${b.project.id}/l/${lot.id}/${offers.length >= 2 ? 'decision' : lineItemsCount(lot.items) ? 'offres' : 'dpgf'}`}
         className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 hover:bg-paper/60 sm:px-5 md:grid-cols-[minmax(0,1.6fr)_1fr_1.2fr_1.1fr]"
       >
         <span className="min-w-0">
-          <span className="block truncate text-[1.0625rem] font-semibold">{lot.name || 'Lot sans nom'}</span>
+          <span className={cx('block truncate text-[1.0625rem] font-semibold', dim && 'text-ink-2')}>{lot.name || 'Lot sans nom'}</span>
           <span className="block truncate text-[0.8438rem] text-ink-3">
             {[lot.code, `${lineItemsCount(lot.items)} ligne${lineItemsCount(lot.items) > 1 ? 's' : ''}`].filter(Boolean).join(', ')}
           </span>
         </span>
         <span className="text-right text-[0.875rem] md:text-left">
           <span className="num block">{fmtDate(lot.due_date)}</span>
-          <span className={cx('block text-[0.7812rem]', due.tone === 'warn' ? 'font-medium text-warn' : 'text-ink-3')}>{due.text}</span>
+          <span className={cx('block text-[0.7812rem]', signal === 'late' ? 'font-medium text-bad' : signal === 'soon' ? 'font-medium text-warn' : 'text-ink-3')}>{due.text}</span>
         </span>
         <span className="flex items-center gap-2">
           <span className="flex -space-x-2">
@@ -269,7 +312,7 @@ function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload:
       </Link>
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-2.5 sm:px-5">
         <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.8125rem] text-ink-2">
-          <LotStatusPill status={status} />
+          <LotSignal kind={signal} />
           {status !== 'draft' && (
             <span>
               <span className="num font-semibold text-ink">{approved}</span> entreprise{approved > 1 ? 's' : ''} acceptée{approved > 1 ? 's' : ''}
@@ -287,7 +330,7 @@ function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload:
               Publier
             </Button>
           )}
-          {status === 'published' && (
+          {status === 'published' && !dim && signal !== 'late' && (
             <Button size="sm" icon={<PauseCircle size={14} />} disabled={busy} onClick={() => setStatus('suspended')}>
               Suspendre
             </Button>

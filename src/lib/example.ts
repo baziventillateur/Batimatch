@@ -465,7 +465,7 @@ function lotPlatrerie(): ExampleLot {
     ['3.1', 'Gaines techniques coupe-feu', 'ml', 210, 64],
   ])
   return {
-    key, name: 'Plâtrerie, isolation, faux plafonds', code: 'Lot 07 – Plâtrerie', status: 'published', due: 12, position: 4,
+    key, name: 'Plâtrerie, isolation, faux plafonds', code: 'Lot 07 – Plâtrerie', status: 'published', due: 2, position: 4,
     description: 'Doublages, cloisons, faux plafonds et gaines techniques des logements et des parties communes.',
     items, budget: 170000, budget_prices: budget,
     settings: { ...DEFAULTS },
