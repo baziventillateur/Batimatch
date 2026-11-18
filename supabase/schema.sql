@@ -166,7 +166,7 @@ alter table public.lot_access add constraint lot_access_status_check check (stat
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
-  kind text not null check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested')),
+  kind text not null check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested', 'offer_reminder')),
   project_id uuid references public.projects (id) on delete cascade,
   lot_id uuid references public.lots (id) on delete cascade,
   -- Celui qui a provoqué l'alerte (l'entreprise qui demande, l'acheteur qui décide)
@@ -179,10 +179,10 @@ create table if not exists public.notifications (
 );
 create index if not exists notifications_user_idx on public.notifications (user_id, created_at desc);
 
--- Mise à jour pour les bases déjà créées : alerte « demande de connexion SSO » (destinée à l'administrateur)
+-- Mise à jour pour les bases déjà créées : alertes « demande de connexion SSO » (administrateur) et « relance » (entreprise)
 alter table public.notifications drop constraint if exists notifications_kind_check;
 alter table public.notifications add constraint notifications_kind_check
-  check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested'));
+  check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested', 'offer_reminder'));
 
 create or replace function public.notify_lot_access()
 returns trigger
@@ -258,7 +258,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.kind in ('access_requested', 'access_approved', 'sso_requested')
+  if new.kind in ('access_requested', 'access_approved', 'sso_requested', 'offer_reminder')
      and exists (select 1 from pg_extension where extname = 'pg_net') then
     perform net.http_post(
       url := 'https://uhdanxctslncwwmcziba.supabase.co/functions/v1/notify-email',
@@ -620,6 +620,70 @@ begin
 end;
 $$;
 
+-- ─── Relance d'une entreprise ───────────────────────────────────────────────
+-- L'acheteur relance une entreprise acceptée sur un lot encore ouvert et qui n'a pas envoyé d'offre.
+-- La relance est une alerte dans la cloche de l'entreprise, doublée d'un e-mail (texte fixe composé par
+-- la fonction d'envoi). Une seule relance par entreprise et par lot toutes les 24 heures.
+-- Renvoie 'sent', ou 'example' pour un projet exemple (entreprises fictives : rien n'est envoyé).
+create or replace function public.remind_company(p_lot uuid, p_user uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_lot public.lots;
+  v_project public.projects;
+  v_buyer public.profiles;
+  v_company public.profiles;
+begin
+  select * into v_lot from public.lots where id = p_lot;
+  if v_lot.id is null or not public.is_project_owner(v_lot.project_id) then
+    raise exception 'reminder_forbidden';
+  end if;
+  select * into v_project from public.projects where id = v_lot.project_id;
+  if not public.lot_open(p_lot) then
+    raise exception 'reminder_closed';
+  end if;
+  if not exists (select 1 from public.lot_access where lot_id = p_lot and user_id = p_user and status = 'approved') then
+    raise exception 'reminder_no_access';
+  end if;
+  if exists (select 1 from public.offers where lot_id = p_lot and company_id = p_user and status = 'submitted') then
+    raise exception 'reminder_answered';
+  end if;
+  if v_project.is_example then
+    return 'example';
+  end if;
+  if exists (select 1 from public.notifications
+             where kind = 'offer_reminder' and lot_id = p_lot and user_id = p_user and created_at > now() - interval '24 hours') then
+    raise exception 'reminder_recent';
+  end if;
+  select * into v_buyer from public.profiles where id = v_project.owner_id;
+  select * into v_company from public.profiles where id = p_user;
+  insert into public.notifications (user_id, kind, project_id, lot_id, actor_id, data)
+  values (p_user, 'offer_reminder', v_project.id, v_lot.id, v_project.owner_id, jsonb_build_object(
+    'project', v_project.name,
+    'lot', v_lot.name,
+    'company', coalesce(nullif(v_company.company_name, ''), trim(v_company.first_name || ' ' || v_company.last_name)),
+    'buyer', coalesce(nullif(v_buyer.company_name, ''), 'L''acheteur'),
+    'contact', trim(coalesce(v_buyer.first_name, '') || ' ' || coalesce(v_buyer.last_name, '')),
+    'email', v_buyer.email,
+    'due', to_char(v_lot.due_date, 'DD/MM/YYYY')
+  ));
+  return 'sent';
+end;
+$$;
+
+-- Dernière relance par entreprise sur un lot (l'acheteur ne lit pas les alertes des entreprises)
+create or replace function public.lot_reminders(p_lot uuid)
+returns table (user_id uuid, last_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select n.user_id, max(n.created_at)
+  from public.notifications n
+  where n.kind = 'offer_reminder' and n.lot_id = p_lot and public.is_lot_owner(p_lot)
+  group by n.user_id;
+$$;
+
 -- ─── Projet exemple ─────────────────────────────────────────────────────────
 -- Un modèle unique (rempli par supabase/example.sql, généré depuis src/lib/example.ts) que chaque acheteur
 -- peut copier dans son compte avec le bouton « Projet exemple ». Les entreprises du modèle ont des comptes
@@ -889,6 +953,10 @@ grant usage on schema public to anon;
 grant execute on function public.request_sso(text, text, text, text, text, text, text) to anon, authenticated;
 revoke all on function public.join_project(text) from public;
 grant execute on function public.join_project(text) to authenticated;
+revoke all on function public.remind_company(uuid, uuid) from public, anon;
+grant execute on function public.remind_company(uuid, uuid) to authenticated;
+revoke all on function public.lot_reminders(uuid) from public, anon;
+grant execute on function public.lot_reminders(uuid) to authenticated;
 revoke all on public.example_template from authenticated, anon;
 revoke all on function public.open_example_project() from public, anon;
 grant execute on function public.open_example_project() to authenticated;

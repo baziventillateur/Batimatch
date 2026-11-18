@@ -190,6 +190,13 @@ export function createSupabaseBackend(): Backend {
       const { data } = await sb.auth.getUser()
       check(await sb.from('lot_access').update({ status: 'approved', comment: null, decided_at: new Date().toISOString() }).eq('lot_id', lotId).eq('user_id', data.user?.id ?? ''))
     },
+    async remindCompany(lotId, userId) {
+      return check(await sb.rpc('remind_company', { p_lot: lotId, p_user: userId })) as 'sent' | 'example'
+    },
+    async listLotReminders(lotId) {
+      const res = await sb.rpc('lot_reminders', { p_lot: lotId })
+      return res.error ? [] : ((res.data ?? []) as { user_id: string; last_at: string }[])
+    },
     async listNotifications() {
       return check(await sb.from('notifications').select('id, user_id, kind, project_id, lot_id, actor_id, data, read_at, created_at').order('created_at', { ascending: false }).limit(30)) as NotificationRow[]
     },

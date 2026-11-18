@@ -378,6 +378,31 @@ export function createMockBackend(): Backend {
       save()
       await delay(null)
     },
+    async remindCompany(lotId, userId) {
+      const l = db.lots.find((x) => x.id === lotId)
+      const p = db.projects.find((x) => x.id === l?.project_id)
+      if (!l || !p || !isOwner(p.id)) throw new Error('reminder_forbidden')
+      if (!lotOpen(lotId)) throw new Error('reminder_closed')
+      if (!db.access.some((a) => a.lot_id === lotId && a.user_id === userId && a.status === 'approved')) throw new Error('reminder_no_access')
+      if (db.offers.some((o) => o.lot_id === lotId && o.company_id === userId && o.status === 'submitted')) throw new Error('reminder_answered')
+      if (p.is_example) return delay('example' as const)
+      const dayAgo = new Date(Date.now() - 86_400_000).toISOString()
+      if (db.notifications.some((n) => n.kind === 'offer_reminder' && n.lot_id === lotId && n.user_id === userId && n.created_at > dayAgo)) throw new Error('reminder_recent')
+      const buyer = db.profiles.find((x) => x.id === p.owner_id)
+      db.notifications.push({
+        id: uid(), user_id: userId, kind: 'offer_reminder', project_id: p.id, lot_id: lotId, actor_id: p.owner_id,
+        data: { project: p.name, lot: l.name, buyer: buyer?.company_name || 'L’acheteur', contact: [buyer?.first_name, buyer?.last_name].filter(Boolean).join(' ') },
+        read_at: null, created_at: now(),
+      })
+      save()
+      return delay('sent' as const)
+    },
+    async listLotReminders(lotId) {
+      if (!isOwner(lotProject(lotId))) return []
+      const last = new Map<string, string>()
+      for (const n of db.notifications) if (n.kind === 'offer_reminder' && n.lot_id === lotId && n.created_at > (last.get(n.user_id) ?? '')) last.set(n.user_id, n.created_at)
+      return delay([...last].map(([user_id, last_at]) => ({ user_id, last_at })))
+    },
     async listNotifications() {
       const mine = db.notifications.filter((n) => n.user_id === db.session)
       return delay(clone(mine).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 30))

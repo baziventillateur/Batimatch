@@ -267,6 +267,29 @@ await as(A, `delete from public.sso_requests where id = $1`, [rid])
 assert.equal((await as(A, `select * from public.sso_messages`)).rows.length, 0)
 console.log('✓ demandes SSO : dépôt sans compte encadré, traitement réservé à l’administrateur')
 
+// Relance : réservée à l'acheteur, pour une entreprise acceptée sans offre sur un lot ouvert, une fois par 24 h
+const rl = (await as(B, `insert into public.lots (project_id, name, due_date, status, items) values ($1, 'Lot relance', current_date + 5, 'published', '[]') returning id`, [pid])).rows[0].id
+await fails(B, `select public.remind_company('${rl}', '${C2}')`, 'relance sans accès accepté')
+await as(C2, `insert into public.lot_access (lot_id, user_id) values ($1, $2)`, [rl, C2])
+await as(B, `update public.lot_access set status = 'approved', decided_at = now() where lot_id = $1 and user_id = $2`, [rl, C2])
+await fails(C1, `select public.remind_company('${rl}', '${C2}')`, 'relance par un autre compte')
+await fails(C2, `select public.remind_company('${rl}', '${C2}')`, 'relance par l’entreprise elle-même')
+assert.equal((await as(B, `select public.remind_company($1, $2) as r`, [rl, C2])).rows[0].r, 'sent')
+await fails(B, `select public.remind_company('${rl}', '${C2}')`, 'deuxième relance dans les 24 h')
+const rem = (await as(C2, `select kind, data, actor_id from public.notifications where kind = 'offer_reminder'`)).rows
+assert.equal(rem.length, 1)
+assert.equal(rem[0].data.lot, 'Lot relance')
+assert.equal(rem[0].data.buyer, 'Léon Grosse')
+assert.equal((await as(C1, `select * from public.notifications where kind = 'offer_reminder'`)).rows.length, 0)
+assert.equal((await as(B, `select * from public.lot_reminders($1)`, [rl])).rows.length, 1)
+assert.equal((await as(C1, `select * from public.lot_reminders($1)`, [rl])).rows.length, 0, 'relances invisibles des autres comptes')
+await db.exec(`update public.notifications set created_at = now() - interval '2 days' where kind = 'offer_reminder'`)
+await as(C2, `insert into public.offers (lot_id, company_id, status, submitted_at) values ($1, $2, 'submitted', now())`, [rl, C2])
+await fails(B, `select public.remind_company('${rl}', '${C2}')`, 'relance d’une entreprise qui a répondu')
+await as(B, `update public.lots set due_date = current_date - 1 where id = $1`, [rl])
+await fails(B, `select public.remind_company('${rl}', '${C1}')`, 'relance sur un lot clôturé')
+console.log('✓ relance : acheteur seulement, entreprise acceptée sans offre, une par 24 h')
+
 // Projet exemple : copie du modèle dans le compte de l'acheteur, sans alerte ni accès pour les autres
 await fails(B, `select public.open_example_project()`, 'exemple avant installation du modèle')
 await db.exec(example)
@@ -299,6 +322,10 @@ assert.ok(exMembers.length >= 10 && exMembers.every((m) => m.logo_url?.startsWit
 const pendingRow = (await as(B, `select lot_id, user_id from public.lot_access where lot_id = any($1) and status = 'pending'`, [exIds])).rows[0]
 await as(B, `update public.lot_access set status = 'approved', decided_at = now() where lot_id = $1 and user_id = $2`, [pendingRow.lot_id, pendingRow.user_id])
 assert.equal((await db.query(`select count(*)::int as n from public.notifications`)).rows[0].n, notifBefore, 'aucune alerte pour l’exemple')
+// Relancer une entreprise fictive : accepté, mais rien n'est envoyé
+const exOpen = (await as(B, `select a.lot_id, a.user_id from public.lot_access a join public.lots l on l.id = a.lot_id where l.project_id = $1 and a.status = 'approved' and l.due_date >= current_date and not exists (select 1 from public.offers o where o.lot_id = a.lot_id and o.company_id = a.user_id) limit 1`, [ex])).rows[0]
+assert.equal((await as(B, `select public.remind_company($1, $2) as r`, [exOpen.lot_id, exOpen.user_id])).rows[0].r, 'example')
+assert.equal((await db.query(`select count(*)::int as n from public.notifications`)).rows[0].n, notifBefore, 'aucune relance réelle dans l’exemple')
 // Les autres comptes ne voient rien, et le code du projet exemple ne permet pas de le rejoindre
 assert.equal((await as(C1, `select * from public.projects where id = $1`, [ex])).rows.length, 0)
 assert.equal((await as(C2, `select * from public.offers where lot_id = any($1)`, [exIds])).rows.length, 0)

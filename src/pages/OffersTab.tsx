@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { CopyPlus, Hourglass, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
 import { useC } from './ConsultationLayout'
@@ -8,6 +8,7 @@ import type { ProjectBundle } from '../data/backend'
 import { companyKey, declaredBase, filledCount, linesOf } from '../lib/calc'
 import { fmtDate, fmtEur, todayIso } from '../lib/format'
 import type { Offer } from '../lib/types'
+import { CompanyCard } from '../components/CompanyCard'
 import { Button, CompanyLogo, Dialog, EmptyState, Field, Menu, MenuItem, Progress, Segmented, cx } from '../components/ui'
 
 export default function OffersTab() {
@@ -16,15 +17,24 @@ export default function OffersTab() {
   const removeOffer = useStore((s) => s.removeOffer)
   const newVersion = useStore((s) => s.newVersion)
   const [adding, setAdding] = useState(false)
-  const [members, setMembers] = useState<ProjectBundle['members']>([])
+  const [bundle, setBundle] = useState<ProjectBundle | null>(null)
+  const [reminders, setReminders] = useState<Record<string, string>>({})
+  const [card, setCard] = useState<string | null>(null)
   const lineCount = linesOf(c.items).length
 
+  const loadReminders = useCallback(() => {
+    api
+      .listLotReminders(c.id)
+      .then((rows) => setReminders(Object.fromEntries(rows.map((r) => [r.user_id, r.last_at]))))
+      .catch(() => {})
+  }, [c.id])
   useEffect(() => {
     api
       .getProject(c.projectId)
-      .then((b) => setMembers(b.members))
+      .then(setBundle)
       .catch(() => {})
-  }, [c.projectId])
+    loadReminders()
+  }, [c.projectId, loadReminders])
 
   const groups = useMemo(() => {
     const map = new Map<string, Offer[]>()
@@ -34,8 +44,10 @@ export default function OffersTab() {
     }
     return [...map.values()].map((list) => [...list].sort((a, b) => b.version - a.version))
   }, [c.offers])
-  // Entreprises inscrites au projet qui n'ont pas (encore) envoyé d'offre sur ce lot
-  const waiting = members.filter((m) => !c.offers.some((o) => o.companyId === m.user_id))
+  // Entreprises acceptées sur ce lot qui n'ont pas (encore) envoyé d'offre
+  const waiting = (bundle?.members ?? []).filter(
+    (m) => bundle!.access.some((a) => a.lot_id === c.id && a.user_id === m.user_id && a.status === 'approved') && !c.offers.some((o) => o.companyId === m.user_id),
+  )
 
   if (!lineCount) {
     return (
@@ -149,14 +161,22 @@ export default function OffersTab() {
 
       {waiting.length > 0 && (
         <section className="panel flex flex-col gap-2 p-4" aria-label="Entreprises en attente">
-          <h3 className="flex items-center gap-2 font-semibold">
+          <h3 className="flex flex-wrap items-center gap-x-2 font-semibold">
             <Hourglass size={16} className="text-warn" /> En attente de réponse
+            <span className="font-normal text-[0.8125rem] text-ink-3">touchez une entreprise pour la contacter ou la relancer</span>
           </h3>
           <ul className="flex flex-wrap gap-2">
             {waiting.map((m) => (
-              <li key={m.user_id} className="inline-flex items-center gap-2 rounded-full border border-line py-1 pr-3 pl-1 text-[0.875rem]">
-                <CompanyLogo name={m.profile?.company_name || '?'} url={m.profile?.logo_url} size={24} />
-                {m.profile?.company_name || 'Entreprise'}
+              <li key={m.user_id}>
+                <button
+                  type="button"
+                  onClick={() => setCard(m.user_id)}
+                  className="btn-raised inline-flex items-center gap-2 rounded-full border border-line py-1 pr-3 pl-1 text-[0.875rem] hover:border-ink-3"
+                >
+                  <CompanyLogo name={m.profile?.company_name || '?'} url={m.profile?.logo_url} size={24} />
+                  {m.profile?.company_name || 'Entreprise'}
+                  {reminders[m.user_id] && <span className="text-[0.75rem] text-ink-3">relancée</span>}
+                </button>
               </li>
             ))}
           </ul>
@@ -171,6 +191,8 @@ export default function OffersTab() {
           </Link>
         </div>
       )}
+
+      {bundle && <CompanyCard b={bundle} lotId={c.id} userId={card} lastReminder={card ? reminders[card] : null} onReminded={loadReminders} onClose={() => setCard(null)} />}
 
       <Dialog open={adding} onClose={() => setAdding(false)} title="Saisir une offre">
         {adding && <AddOfferForm onClose={() => setAdding(false)} />}

@@ -91,6 +91,10 @@ export interface Backend {
   declineLot(lotId: string, comment: string): Promise<void>
   /** Entreprise : revenir sur un « ne pas répondre » */
   undeclineLot(lotId: string): Promise<void>
+  /** Acheteur : relance par e-mail une entreprise acceptée qui n'a pas encore répondu. « example » : projet exemple, rien n'est envoyé. */
+  remindCompany(lotId: string, userId: string): Promise<'sent' | 'example'>
+  /** Acheteur : date de la dernière relance par entreprise sur un lot */
+  listLotReminders(lotId: string): Promise<{ user_id: string; last_at: string }[]>
   /** Alertes de la cloche, les plus récentes d'abord */
   listNotifications(): Promise<NotificationRow[]>
   markNotificationsRead(ids: string[]): Promise<void>
@@ -123,9 +127,13 @@ export function errorMessage(e: unknown): string {
   if (/sso_busy/.test(raw)) return 'Trop de demandes en ce moment. Réessayez dans une heure ou écrivez à contact@paceapp.fr.'
   if (/sso_email/.test(raw)) return 'Cette adresse e-mail ne semble pas valide.'
   if (/sso_company|sso_contact/.test(raw)) return 'Indiquez le nom de l’entreprise et celui du contact.'
+  if (/reminder_recent/.test(raw)) return 'Cette entreprise a déjà été relancée il y a moins de 24 heures.'
+  if (/reminder_closed/.test(raw)) return 'Ce lot n’accepte plus d’offres (non publié, suspendu ou date de remise dépassée) : repoussez la date avant de relancer.'
+  if (/reminder_answered/.test(raw)) return 'Cette entreprise a déjà envoyé son offre.'
+  if (/reminder_no_access|reminder_forbidden/.test(raw)) return 'Relance impossible : l’entreprise n’est pas acceptée sur ce lot.'
   if (/example_buyer_only/.test(raw)) return 'Le projet exemple est réservé aux comptes acheteurs.'
   if (/example_missing/.test(raw)) return 'Le projet exemple n’est pas encore installé : exécutez supabase/example.sql dans l’éditeur SQL de Supabase.'
-  if (/open_example_project|is_example|lot_access|notifications|sso_requests|sso_messages|request_sso|tech_note|offer-files|Bucket not found|project_lot_catalog|column .*status.* does not exist|schema cache/i.test(raw)) return 'La base de données doit être mise à jour : relancez supabase/schema.sql dans l’éditeur SQL de Supabase.'
+  if (/remind_company|lot_reminders|open_example_project|is_example|lot_access|notifications|sso_requests|sso_messages|request_sso|tech_note|offer-files|Bucket not found|project_lot_catalog|column .*status.* does not exist|schema cache/i.test(raw)) return 'La base de données doit être mise à jour : relancez supabase/schema.sql dans l’éditeur SQL de Supabase.'
   if (/signups not allowed/i.test(raw)) return 'Aucun compte avec cet email. Créez un compte.'
   if (/token has expired|otp_expired|invalid.*otp|otp.*invalid/i.test(raw)) return 'Code incorrect ou expiré. Vérifiez-le ou demandez-en un nouveau.'
   if (/security purposes/i.test(raw)) return 'Patientez une minute avant de redemander un code.'

@@ -1,5 +1,5 @@
 // Envoi des e-mails Batimatch :
-//   • alertes (demande d'accès reçue, accès accepté, demande de connexion SSO pour l'administrateur) ;
+//   • alertes (demande d'accès reçue, accès accepté, relance d'une entreprise, demande de connexion SSO pour l'administrateur) ;
 //   • messages aux entreprises qui demandent le SSO (accusé de réception, réponses de l'administrateur).
 // Appelée par la base (déclencheurs sur public.notifications et public.sso_messages) avec le seul
 // identifiant de la ligne : la fonction la relit, la marque « envoyée » de façon atomique, puis expédie
@@ -92,7 +92,7 @@ interface Notification {
   kind: string
   project_id: string | null
   lot_id: string | null
-  data: { project?: string; lot?: string; company?: string; contact?: string; email?: string; phone?: string; users?: string; provider?: string; message?: string }
+  data: { project?: string; lot?: string; company?: string; contact?: string; email?: string; phone?: string; users?: string; provider?: string; message?: string; buyer?: string; due?: string }
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/
@@ -130,6 +130,26 @@ function compose(n: Notification): Mail | null {
       cta: { label: 'Répondre au lot', url },
       reason: 'Vous recevez cet e-mail parce que vous avez demandé l’accès à ce lot sur Batimatch.',
       text: `Votre accès au lot ${lot} (projet ${project}) est accepté.\n\nRépondre au lot : ${url}`,
+    }
+  }
+  if (n.kind === 'offer_reminder') {
+    const url = `${SITE}/#/p/${n.project_id}/l/${n.lot_id}`
+    const buyer = n.data.buyer || 'L’acheteur'
+    const who = n.data.contact ? `${n.data.contact} (${buyer})` : buyer
+    return {
+      subject: `Relance : votre offre pour le lot ${lot}, ${project}`,
+      preheader: `${who} attend votre offre${n.data.due ? ` avant le ${n.data.due}` : ''}.`,
+      title: 'Votre offre est attendue',
+      subtitle: `${who} vous relance sur Batimatch.`,
+      bodyHtml: facts([['Projet', project], ['Lot', lot], ['Date de remise', n.data.due ?? ''], ['Demandé par', who]]) +
+        p('Pour rappel, vous avez accès à ce lot et nous n’avons pas encore reçu votre offre. Le bouton ci-dessous vous amène directement à la DPGF à compléter.') +
+        p('Si vous ne souhaitez pas répondre, vous pouvez l’indiquer sur la page du lot : l’acheteur en sera informé.'),
+      cta: { label: 'Répondre à la DPGF', url },
+      reason: 'Vous recevez cet e-mail parce que vous êtes accepté sur ce lot dans Batimatch et que l’acheteur vous a relancé.',
+      text: `${who} vous relance : votre offre est attendue pour le lot ${lot} (projet ${project})${n.data.due ? `, avant le ${n.data.due}` : ''}.
+
+Répondre à la DPGF : ${url}`,
+      replyTo: n.data.email && EMAIL_RE.test(n.data.email) ? n.data.email : undefined,
     }
   }
   if (n.kind === 'sso_requested') {
@@ -241,7 +261,7 @@ Deno.serve(async (req) => {
     .update({ emailed_at: new Date().toISOString() })
     .eq('id', id)
     .is('emailed_at', null)
-    .in('kind', ['access_requested', 'access_approved', 'sso_requested'])
+    .in('kind', ['access_requested', 'access_approved', 'sso_requested', 'offer_reminder'])
     .gte('created_at', since)
     .select('id, user_id, kind, project_id, lot_id, data')
     .maybeSingle()

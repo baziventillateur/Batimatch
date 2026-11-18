@@ -54,7 +54,7 @@ export interface LotAccessRow {
   comment?: string | null
 }
 
-export type NotificationKind = 'access_requested' | 'access_approved' | 'access_refused' | 'lot_declined' | 'sso_requested'
+export type NotificationKind = 'access_requested' | 'access_approved' | 'access_refused' | 'lot_declined' | 'sso_requested' | 'offer_reminder'
 
 /** Alerte de la cloche, créée par la base quand une demande d'accès évolue */
 export interface NotificationRow {
@@ -65,7 +65,7 @@ export interface NotificationRow {
   lot_id: string | null
   /** Celui qui a provoqué l'alerte */
   actor_id: string | null
-  data: { project?: string; lot?: string; company?: string; contact?: string; comment?: string | null; request?: string; email?: string; users?: string }
+  data: { project?: string; lot?: string; company?: string; contact?: string; comment?: string | null; request?: string; email?: string; users?: string; buyer?: string; due?: string }
   read_at: string | null
   created_at: string
 }
