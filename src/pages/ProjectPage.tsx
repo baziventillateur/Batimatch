@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { REFRESH_EVENT } from '../components/Bell'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Check, ChevronLeft, Clock, Copy, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, UserMinus, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Clock, Copy, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, UserMinus, X } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import { useAuth } from '../data/auth'
 import type { ProjectBundle } from '../data/backend'
@@ -9,7 +9,7 @@ import type { AccessStatus, LotStatus } from '../data/rows'
 import { DEFAULT_SETTINGS, type Offer } from '../lib/types'
 import { declaredBase, linesOf } from '../lib/calc'
 import { daysUntil, fmtDate, fmtEur, fmtPctSigned, todayIso } from '../lib/format'
-import { Button, CompanyLogo, Dialog, EmptyState, ErrorBox, Field, Loading, Menu, MenuItem, NumberInput, Spinner, cx, dueLabel } from '../components/ui'
+import { Button, CompanyLogo, Dialog, Segmented, EmptyState, ErrorBox, Field, Loading, Menu, MenuItem, NumberInput, Spinner, cx, dueLabel } from '../components/ui'
 import { ProjectForm } from './Home'
 
 export default function ProjectPage() {
@@ -107,7 +107,7 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
 
       {b.project.is_example ? <ExampleBanner projectId={b.project.id} /> : <InvitePanel code={b.project.access_code} projectName={b.project.name} />}
 
-      <AccessRequests b={b} reload={reload} />
+      <Companies b={b} reload={reload} />
 
       <section className="flex flex-col gap-3" aria-labelledby="lots-title">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -130,8 +130,6 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
           </ul>
         )}
       </section>
-
-      <Members b={b} reload={reload} />
 
       <ProjectForm
         open={editing}
@@ -314,13 +312,142 @@ function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload:
   )
 }
 
+/**
+ * Entreprises du projet, en condensé : le parcours (inscrites → accès acceptés → offres remises),
+ * les 5 dernières demandes d'accès (celles à traiter d'abord), et « Tout voir » pour le détail.
+ */
+function Companies({ b, reload }: { b: ProjectBundle; reload: () => void }) {
+  const [view, setView] = useState<'access' | 'members' | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const order: Record<AccessStatus, number> = { pending: 0, approved: 1, declined: 1, refused: 1 }
+  const rows = [...b.access].sort((x, y) => order[x.status] - order[y.status] || (y.decided_at ?? y.requested_at).localeCompare(x.decided_at ?? x.requested_at))
+  const pending = rows.filter((r) => r.status === 'pending').length
+  const distinct = (ids: (string | null)[]) => new Set(ids.filter(Boolean)).size
+  const approved = distinct(b.access.filter((a) => a.status === 'approved').map((a) => a.user_id))
+  const answered = new Set(b.offers.filter((o) => o.status === 'submitted' || o.source === 'manual').map((o) => o.company_name.trim().toLowerCase())).size
+  const decide = async (lotId: string, userId: string, status: 'approved' | 'refused') => {
+    setBusy(`${lotId}:${userId}`)
+    try {
+      await api.decideLotAccess(lotId, userId, status)
+      reload()
+    } catch (e) {
+      alert(errorMessage(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+  const STATUS: Record<AccessStatus, { label: string; cls: string }> = {
+    pending: { label: 'À traiter', cls: 'bg-warn-soft text-warn' },
+    approved: { label: 'Acceptée', cls: 'bg-good-soft text-good' },
+    refused: { label: 'Refusée', cls: 'bg-line-2 text-ink-2' },
+    declined: { label: 'Ne répond pas', cls: 'bg-line-2 text-ink-2' },
+  }
+  const steps: { n: number; label: string; open: 'access' | 'members'; warn?: boolean }[] = [
+    { n: b.members.length, label: 'inscrites', open: 'members' },
+    { n: approved, label: 'acceptées', open: 'access' },
+    { n: answered, label: 'offre remise', open: 'members' },
+  ]
+
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="companies-title">
+      <h2 id="companies-title" className="flex items-center gap-2.5 font-title text-[1.625rem] font-semibold">
+        Entreprises
+        {pending > 0 && (
+          <span className="anim-pop rounded-full bg-warn px-2 py-0.5 font-sans text-[0.8125rem] font-semibold text-sheet">
+            {pending} demande{pending > 1 ? 's' : ''} à traiter
+          </span>
+        )}
+      </h2>
+      <div className="panel overflow-hidden">
+        {/* Parcours : chaque étape ouvre le détail */}
+        <ol className="flex items-stretch border-b border-line-2 bg-paper/50">
+          {steps.map((st, i) => (
+            <li key={st.label} className="flex min-w-0 flex-1 items-center">
+              {i > 0 && <ChevronRight size={16} className="-mx-2 shrink-0 text-ink-3" aria-hidden="true" />}
+              <button type="button" onClick={() => setView(st.open)} className="min-w-0 flex-1 px-3 py-2 text-left hover:bg-ink/4 sm:px-5">
+                <span className="num block text-[1.25rem] leading-tight font-semibold">{st.n}</span>
+                <span className="block truncate text-[0.7812rem] leading-tight text-ink-3">{st.label}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+
+        {b.members.length === 0 ? (
+          <p className="px-4 py-3 text-[0.9062rem] text-ink-2 sm:px-5">Aucune entreprise n’a encore rejoint le projet. Partagez le code ci-dessus.</p>
+        ) : rows.length === 0 ? (
+          <p className="px-4 py-3 text-[0.9062rem] text-ink-2 sm:px-5">Aucune demande d’accès à un lot pour l’instant.</p>
+        ) : (
+          <ul>
+            {rows.slice(0, 5).map((r) => {
+              const p = b.members.find((m) => m.user_id === r.user_id)?.profile
+              const lot = b.lots.find((l) => l.id === r.lot_id)
+              const name = p?.company_name || 'Entreprise'
+              const key = `${r.lot_id}:${r.user_id}`
+              return (
+                <li key={key} className={cx('flex items-center gap-2.5 border-b border-line-2 px-3 py-1.5 last:border-0 sm:px-5', r.status === 'pending' && 'bg-warn-soft/40')}>
+                  <CompanyLogo name={name} url={p?.logo_url} size={26} />
+                  <p className="min-w-0 flex-1 truncate text-[0.9062rem] leading-snug">
+                    <span className="font-semibold">{name}</span>
+                    <span className="text-ink-3"> · </span>
+                    <span className="text-ink-2">{lot?.name || 'un lot'}</span>
+                  </p>
+                  <span className="num hidden shrink-0 text-[0.7812rem] text-ink-3 sm:block">{fmtDate(r.requested_at.slice(0, 10))}</span>
+                  {r.status === 'pending' ? (
+                    <span className="flex shrink-0 gap-1">
+                      <Button size="sm" className="!h-7 !px-2" icon={<X size={13} />} disabled={busy === key} onClick={() => decide(r.lot_id, r.user_id, 'refused')} aria-label={`Refuser ${name}`}>
+                        <span className="hidden sm:inline">Refuser</span>
+                      </Button>
+                      <Button size="sm" variant="primary" className="!h-7 !px-2" icon={<Check size={13} />} disabled={busy === key} onClick={() => decide(r.lot_id, r.user_id, 'approved')}>
+                        Accepter
+                      </Button>
+                    </span>
+                  ) : (
+                    <span className={cx('shrink-0 rounded-[3px] px-1.5 py-0.5 text-[0.75rem] font-semibold', STATUS[r.status].cls)}>{STATUS[r.status].label}</span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+
+        {b.members.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setView('access')}
+            className="flex w-full items-center justify-center gap-1 border-t border-line-2 px-4 py-2 text-[0.875rem] font-medium text-plan hover:bg-ink/4"
+          >
+            Tout voir : {rows.length} demande{rows.length > 1 ? 's' : ''}, {b.members.length} entreprise{b.members.length > 1 ? 's' : ''} <ChevronRight size={15} />
+          </button>
+        )}
+      </div>
+
+      <Dialog open={view != null} onClose={() => setView(null)} title="Entreprises du projet" wide>
+        {view && (
+          <div className="flex flex-col gap-2">
+            <Segmented
+              label="Vue"
+              size="sm"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'access', label: `Demandes d’accès (${rows.length})` },
+                { value: 'members', label: `Entreprises inscrites (${b.members.length})` },
+              ]}
+            />
+            {view === 'access' ? <AccessRequests b={b} reload={reload} /> : <Members b={b} reload={reload} />}
+          </div>
+        )}
+      </Dialog>
+    </section>
+  )
+}
+
 /** Demandes d'accès aux lots : l'acheteur accepte ou refuse chaque entreprise, lot par lot */
 function AccessRequests({ b, reload }: { b: ProjectBundle; reload: () => void }) {
   const [busy, setBusy] = useState<string | null>(null)
   const order: Record<AccessStatus, number> = { pending: 0, approved: 1, declined: 2, refused: 3 }
   const rows = [...b.access].sort((x, y) => order[x.status] - order[y.status] || y.requested_at.localeCompare(x.requested_at))
-  if (!rows.length) return null
-  const pending = rows.filter((r) => r.status === 'pending').length
+  if (!rows.length) return <p className="py-4 text-ink-2">Aucune demande d’accès pour l’instant.</p>
   const decide = async (lotId: string, userId: string, status: 'approved' | 'refused') => {
     setBusy(`${lotId}:${userId}`)
     try {
@@ -333,25 +460,21 @@ function AccessRequests({ b, reload }: { b: ProjectBundle; reload: () => void })
     }
   }
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="access-title">
-      <h2 id="access-title" className="flex items-center gap-2.5 font-title text-[1.625rem] font-semibold">
-        Demandes d’accès
-        {pending > 0 && <span className="num anim-pop rounded-full bg-warn px-2 py-0.5 font-sans text-[0.8125rem] font-semibold text-sheet">{pending}</span>}
-      </h2>
-      <ul className="panel">
+      <ul>
         {rows.map((r) => {
           const p = b.members.find((m) => m.user_id === r.user_id)?.profile
           const lot = b.lots.find((l) => l.id === r.lot_id)
           const name = p?.company_name || 'Entreprise'
           const key = `${r.lot_id}:${r.user_id}`
           return (
-            <li key={key} className={cx('flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-2 px-4 py-2.5 last:border-0 sm:px-5', r.status === 'pending' && 'bg-warn-soft/40')}>
+            <li key={key} className={cx('flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-2 px-1 py-2.5 last:border-0', r.status === 'pending' && 'bg-warn-soft/40')}>
               <CompanyLogo name={name} url={p?.logo_url} size={36} />
               <div className="min-w-[9rem] flex-1">
                 <p className="font-semibold leading-snug">{name}</p>
                 <p className="text-[0.8438rem] leading-snug">
                   <span className="text-ink-3">{r.status === 'declined' ? 'ne répond pas à' : 'demande l’accès à'}</span>{' '}
                   <span className="font-medium">{lot?.name || 'un lot'}</span>
+                  <span className="text-ink-3">, le {fmtDate(r.requested_at.slice(0, 10))}</span>
                 </p>
                 {r.status === 'declined' && r.comment && <p className="mt-0.5 text-[0.8438rem] italic text-ink-2">« {r.comment} »</p>}
                 <p className="flex flex-wrap gap-x-3 text-[0.8125rem] text-ink-2">
@@ -404,7 +527,6 @@ function AccessRequests({ b, reload }: { b: ProjectBundle; reload: () => void })
           )
         })}
       </ul>
-    </section>
   )
 }
 
@@ -458,24 +580,14 @@ function InvitePanel({ code, projectName }: { code: string; projectName: string 
 }
 
 function Members({ b, reload }: { b: ProjectBundle; reload: () => void }) {
-  if (!b.members.length) {
-    return (
-      <section className="flex flex-col gap-3">
-        <h2 className="font-title text-[1.625rem] font-semibold">Entreprises inscrites</h2>
-        <p className="panel px-5 py-4 text-ink-2">Aucune entreprise n’a encore rejoint le projet. Partagez le code ci-dessus.</p>
-      </section>
-    )
-  }
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="font-title text-[1.625rem] font-semibold">Entreprises inscrites</h2>
-      <ul className="panel">
+      <ul>
         {b.members.map((m) => {
           const p = m.profile
           const sent = b.offers.filter((o) => o.company_id === m.user_id && o.status === 'submitted').length
           const name = p?.company_name || 'Entreprise'
           return (
-            <li key={m.user_id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-line-2 px-4 py-3 last:border-0 sm:px-5">
+            <li key={m.user_id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-line-2 px-1 py-2.5 last:border-0">
               <CompanyLogo name={name} url={p?.logo_url} size={40} />
               <div className="min-w-0">
                 <p className="truncate font-semibold">{name}</p>
@@ -520,7 +632,6 @@ function Members({ b, reload }: { b: ProjectBundle; reload: () => void }) {
           )
         })}
       </ul>
-    </section>
   )
 }
 
