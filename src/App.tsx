@@ -147,7 +147,7 @@ function Shell() {
           Mode démonstration : les données restent dans ce navigateur.
         </p>
       )}
-      <header className="no-print border-b border-line bg-sheet">
+      <header className="app-bar no-print">
         <div className="mx-auto flex h-12 max-w-[1320px] sm:h-14 items-center justify-between gap-4 px-3 sm:px-6">
           <Logo />
           <UserMenu />

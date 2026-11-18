@@ -102,13 +102,13 @@ function PodiumSection({ c, a, scored }: { c: Consultation; a: Analysis; scored:
                     Retenue
                   </span>
                 )}
-                <span className="anim-pop" style={{ animationDelay: `${0.5 + (3 - rank) * 0.12}s` }}>
+                <span className="anim-pop logo-lift" style={{ animationDelay: `${0.5 + (3 - rank) * 0.12}s` }}>
                   <CompanyLogo name={s.result.offer.company || '?'} url={s.result.offer.logoUrl} size={rank === 1 ? 64 : 50} />
                 </span>
                 <span className={cx('line-clamp-2 w-full text-[0.8438rem] leading-tight sm:text-[0.9375rem]', rank === 1 && 'font-semibold')}>{s.result.label}</span>
                 <span className="num text-[0.8125rem] text-ink-2">{fmtEur(s.result.total)}</span>
                 <div
-                  className={cx('anim-rise flex w-full flex-col items-center justify-start rounded-t-[6px] pt-2', rank === 1 ? 'bg-marker text-night' : 'bg-line-2')}
+                  className={cx('anim-rise flex w-full flex-col items-center justify-start rounded-t-[8px] pt-2', rank === 1 ? 'podium-step-first text-night' : 'podium-step')}
                   style={{ height: heights[rank], animationDelay: `${(3 - rank) * 0.12}s` }}
                 >
                   <span className="num font-title text-[1.875rem] leading-none font-bold">{rank}</span>
@@ -287,7 +287,7 @@ function OfferCard({ c, a, s }: { c: Consultation; a: Analysis; s: ScoredOffer }
   const isAwarded = c.awardedOfferId === o.id
 
   return (
-    <article className={cx('panel relative flex flex-col transition-opacity', s.verdict === 'ecarte' && 'opacity-60', isAwarded && 'border-good ring-2 ring-good/30')}>
+    <article className={cx('panel relative flex flex-col transition-opacity', s.verdict === 'ecarte' && 'opacity-60', s.rank === 1 && !isAwarded && 'shadow-[var(--shadow-2)]', isAwarded && 'border-good ring-2 ring-good/30')}>
       {isAwarded && (
         <span className="anim-stamp absolute top-3 right-3 rounded-[4px] border-2 border-good px-2 py-0.5 text-[0.75rem] font-bold tracking-wide text-good uppercase">Retenue</span>
       )}
@@ -340,8 +340,8 @@ function OfferCard({ c, a, s }: { c: Consultation; a: Analysis; s: ScoredOffer }
             </span>
             <span className="num text-right text-[0.875rem] font-semibold">{cs.score != null ? `${fmtScore(cs.score)}` : '—'}</span>
             {cs.auto ? (
-              <span className="col-span-2 h-2 rounded-full bg-line-2">
-                <span className="block h-full rounded-full bg-s1 transition-[width] duration-500" style={{ width: `${((cs.score ?? 0) / 20) * 100}%` }} />
+              <span className="gauge-track col-span-2 h-2 rounded-full">
+                <span className="gauge-fill block h-full rounded-full transition-[width] duration-500" style={{ width: `${((cs.score ?? 0) / 20) * 100}%` }} />
               </span>
             ) : (
               <input

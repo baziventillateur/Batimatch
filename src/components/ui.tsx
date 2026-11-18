@@ -21,8 +21,8 @@ export const cx = (...xs: (string | false | null | undefined)[]) => xs.filter(Bo
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-plan text-sheet hover:bg-plan-dark border border-plan-dark/40',
-  secondary: 'bg-sheet text-ink border border-line hover:border-ink-3',
+  primary: 'btn-primary bg-plan text-sheet border border-plan-dark/50',
+  secondary: 'btn-raised bg-sheet text-ink border border-line hover:border-ink-3',
   ghost: 'text-ink-2 hover:bg-ink/5 hover:text-ink border border-transparent',
   danger: 'bg-sheet text-bad border border-bad/30 hover:bg-bad-soft',
 }
@@ -39,7 +39,7 @@ export function Button({
     <button
       type="button"
       className={cx(
-        'inline-flex items-center justify-center gap-2 rounded-[5px] font-medium whitespace-nowrap transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45',
+        'inline-flex items-center justify-center gap-2 rounded-[5px] font-medium whitespace-nowrap transition-[color,background-color,border-color,transform,box-shadow] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45',
         size === 'sm' ? 'h-8 px-2.5 text-[0.8438rem]' : 'h-10 px-3.5 text-[0.9375rem]',
         VARIANTS[variant],
         className,
@@ -368,7 +368,7 @@ export function Progress({ value, className }: { value: number; className?: stri
   const v = Math.max(0, Math.min(1, value))
   return (
     <div
-      className={cx('h-1.5 w-full overflow-hidden rounded-full bg-line-2', className)}
+      className={cx('gauge-track h-1.5 w-full overflow-hidden rounded-full', className)}
       role="progressbar"
       aria-valuenow={Math.round(v * 100)}
       aria-valuemin={0}

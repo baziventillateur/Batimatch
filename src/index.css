@@ -45,6 +45,14 @@
   --color-s2: #eb6834;
   --color-s3: #1baf7a;
 
+  /* Profondeur : ombres teintées d'encre, en trois niveaux (posé, soulevé, flottant) */
+  --shadow-1: 0 1px 1px rgb(27 42 58 / 0.04), 0 2px 6px -1px rgb(27 42 58 / 0.06), 0 10px 24px -14px rgb(27 42 58 / 0.14);
+  --shadow-2: 0 1px 2px rgb(27 42 58 / 0.05), 0 8px 18px -6px rgb(27 42 58 / 0.12), 0 22px 40px -18px rgb(27 42 58 / 0.22);
+  --shadow-3: 0 2px 4px rgb(27 42 58 / 0.06), 0 18px 36px -10px rgb(27 42 58 / 0.22), 0 40px 70px -30px rgb(27 42 58 / 0.3);
+  --sheet-top: #ffffff;
+  --sheet-bottom: #fbfcfd;
+  --grid-line: rgb(42 92 143 / 0.045);
+
   --font-sans: 'Barlow', ui-sans-serif, system-ui, sans-serif;
   --font-cond: 'Barlow Semi Condensed', 'Barlow', ui-sans-serif, sans-serif;
   --font-title: 'Barlow Condensed', 'Barlow Semi Condensed', ui-sans-serif, sans-serif;
@@ -74,6 +82,12 @@
     --color-sst: #f2a25c;
     --color-budget: #7fb6f2;
     --color-budget-soft: #14283f;
+    --shadow-1: 0 1px 1px rgb(0 0 0 / 0.3), 0 4px 10px -2px rgb(0 0 0 / 0.35), 0 14px 28px -16px rgb(0 0 0 / 0.5);
+    --shadow-2: 0 1px 2px rgb(0 0 0 / 0.35), 0 10px 22px -6px rgb(0 0 0 / 0.45), 0 26px 44px -18px rgb(0 0 0 / 0.6);
+    --shadow-3: 0 2px 4px rgb(0 0 0 / 0.4), 0 20px 40px -10px rgb(0 0 0 / 0.55), 0 44px 80px -30px rgb(0 0 0 / 0.7);
+    --sheet-top: #1a2634;
+    --sheet-bottom: #16202c;
+    --grid-line: rgb(116 171 228 / 0.05);
   }
 }
 
@@ -97,6 +111,18 @@
     font-size: 0.9375rem;
     line-height: 1.45;
     transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  /* Fond : halo de lumière en haut et trame de plan très légère, fixes derrière le contenu */
+  @media screen {
+    body {
+      background-image:
+        radial-gradient(1100px 520px at 12% -8%, color-mix(in srgb, var(--color-plan) 11%, transparent), transparent 70%),
+        radial-gradient(900px 480px at 100% 0%, color-mix(in srgb, var(--color-marker) 9%, transparent), transparent 65%),
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: auto, auto, 32px 32px, 32px 32px;
+      background-attachment: fixed;
+    }
   }
   :focus-visible {
     outline: 2px solid var(--color-plan);
@@ -172,7 +198,9 @@
 
   /* Cartouche : bloc-titre inspiré des plans d'exécution */
   .cartouche {
-    @apply border border-ink/80 bg-sheet;
+    @apply rounded-[10px] border border-ink/70 bg-sheet overflow-hidden;
+    background-image: linear-gradient(var(--sheet-top), var(--sheet-bottom));
+    box-shadow: var(--shadow-2);
   }
   .cartouche-cell {
     @apply border-ink/25 px-3 py-1.5 sm:px-4 sm:py-3;
@@ -182,7 +210,74 @@
   }
 
   .panel {
-    @apply rounded-md border border-line bg-sheet;
+    @apply rounded-[10px] border bg-sheet;
+    border-color: color-mix(in srgb, var(--color-line) 75%, transparent);
+    background-image: linear-gradient(var(--sheet-top), var(--sheet-bottom));
+    box-shadow: var(--shadow-1);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  }
+  /* Cartes cliquables : elles se soulèvent */
+  a.panel:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-2);
+  }
+
+  /* Barre du haut : verre dépoli, reste visible au défilement */
+  .app-bar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: color-mix(in srgb, var(--color-sheet) 82%, transparent);
+    backdrop-filter: blur(12px) saturate(1.4);
+    -webkit-backdrop-filter: blur(12px) saturate(1.4);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.5) inset, 0 6px 20px -12px rgb(27 42 58 / 0.25);
+  }
+
+  /* Boutons en relief */
+  .btn-primary {
+    background-image: linear-gradient(180deg, color-mix(in srgb, var(--color-plan) 88%, white), var(--color-plan) 55%, var(--color-plan-dark));
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.22) inset, 0 1px 2px rgb(27 42 58 / 0.2), 0 6px 14px -6px color-mix(in srgb, var(--color-plan) 70%, transparent);
+  }
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.22) inset, 0 2px 4px rgb(27 42 58 / 0.22), 0 10px 20px -8px color-mix(in srgb, var(--color-plan) 80%, transparent);
+    transform: translateY(-1px);
+  }
+  .btn-raised {
+    background-image: linear-gradient(var(--sheet-top), var(--sheet-bottom));
+    box-shadow: 0 1px 2px rgb(27 42 58 / 0.07), 0 1px 0 rgb(255 255 255 / 0.6) inset;
+  }
+  .btn-raised:hover:not(:disabled) {
+    box-shadow: 0 2px 6px -1px rgb(27 42 58 / 0.14), 0 1px 0 rgb(255 255 255 / 0.6) inset;
+  }
+
+  /* Jauges : rail creusé, remplissage lumineux */
+  .gauge-track {
+    background: var(--color-line-2);
+    box-shadow: inset 0 1px 2px rgb(27 42 58 / 0.14);
+  }
+  .gauge-fill {
+    background-image: linear-gradient(90deg, color-mix(in srgb, var(--color-s1) 78%, white), var(--color-s1));
+    box-shadow: 0 1px 4px -1px color-mix(in srgb, var(--color-s1) 70%, transparent);
+  }
+
+  /* Podium : marches en volume */
+  .podium-step {
+    background-image: linear-gradient(180deg, var(--sheet-top), var(--color-line-2));
+    border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
+    border-bottom: 0;
+    box-shadow: 0 -1px 0 rgb(255 255 255 / 0.5) inset, 0 -10px 24px -14px rgb(27 42 58 / 0.25);
+  }
+  .podium-step-first {
+    background-image: linear-gradient(180deg, color-mix(in srgb, var(--color-marker) 80%, white), var(--color-marker) 45%, color-mix(in srgb, var(--color-marker) 86%, #b98a00));
+    border: 1px solid color-mix(in srgb, var(--color-marker) 70%, #8a6a00);
+    border-bottom: 0;
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.55) inset, 0 -14px 34px -12px color-mix(in srgb, var(--color-marker) 75%, transparent);
+  }
+  .logo-lift {
+    box-shadow: var(--shadow-2);
+    border-radius: 8px;
+    display: inline-flex;
   }
 
   .tip {
@@ -481,5 +576,13 @@ dialog[open] {
   .panel {
     break-inside: avoid;
     border-color: #ccc;
+  }
+  .panel,
+  .cartouche,
+  .podium-step,
+  .podium-step-first,
+  .logo-lift {
+    box-shadow: none;
+    background-image: none;
   }
 }
