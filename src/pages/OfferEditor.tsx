@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, ClipboardPaste, CopyPlus, Eye, EyeOff, ImageUp, Lock, Mail, Phone, Plus, Search, Trash2, Undo2 } from 'lucide-react'
+import { Check, ChevronLeft, ClipboardPaste, CopyPlus, Eye, EyeOff, ImageUp, Lock, Mail, Phone, Plus, Search, Trash2, Undo2 } from 'lucide-react'
 import { useC } from './ConsultationLayout'
 import { useStore } from '../store'
 import { useAuth } from '../data/auth'
@@ -527,7 +527,7 @@ export function PriceGrid({
       </div>
       {!readOnly && (
         <p className="no-print text-[0.8125rem] text-ink-3">
-          Entrée ou ↓ : ligne suivante. Tapez « i » pour une prestation incluse. Collez une colonne Excel dans une case pour remplir les lignes suivantes.
+          Entrée ou ↓ : ligne suivante. Bouton « Incl. » (ou touche « i ») pour une prestation incluse ; tapez un prix pour le remplacer. Collez une colonne Excel dans une case pour remplir les lignes suivantes.
         </p>
       )}
       <PastePricesDialog open={pasteOpen} onClose={() => setPasteOpen(false)} lines={visibleLines.map((r) => r.item)} prices={offer.prices} onApply={applyMany} />
@@ -623,13 +623,21 @@ const PriceRow = memo(function PriceRow({
   const amount = value === undefined ? null : value === 'inclus' ? 0 : value * qtyOf(item)
   const deviation = typeof value === 'number' && med != null && med > 0 ? (value - med) / med : null
   const strong = deviation != null && Math.abs(deviation) > ANOMALY_THRESHOLD
-  const display = draft ?? (value === undefined ? '' : value === 'inclus' ? 'inclus' : fmtNum(value))
+  const included = value === 'inclus'
+  // « Inclus » est porté par le bouton : la case reste libre pour taper un prix, qui le remplace
+  const display = draft ?? (value === undefined || included ? '' : fmtNum(value))
 
   const commit = () => {
     if (draft == null) return
     const v = parsePrice(draft)
     setDraft(null)
+    // Case laissée vide sur une ligne « inclus » : on garde « inclus »
+    if (included && draft.trim() === '') return
     if (v !== (value ?? null)) onCommit(v)
+  }
+  const toggleIncluded = () => {
+    setDraft(null)
+    onCommit(included ? null : 'inclus')
   }
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === 'ArrowDown') {
@@ -639,6 +647,10 @@ const PriceRow = memo(function PriceRow({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       onNav(-1)
+    } else if ((e.key === 'Backspace' || e.key === 'Delete') && included && !draft) {
+      // Effacer sur une ligne « inclus » la remet à « non chiffré »
+      e.preventDefault()
+      onCommit(null)
     } else if (e.key === 'Escape') {
       setDraft(null)
       ;(e.target as HTMLInputElement).blur()
@@ -697,6 +709,23 @@ const PriceRow = memo(function PriceRow({
           {value === undefined ? 'non chiffré' : value === 'inclus' ? 'inclus' : fmtNum(value)}
         </span>
       ) : (
+        <div className="relative">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-pressed={included}
+            aria-label={`${included ? 'Retirer « inclus »' : 'Marquer « inclus »'}, ${item.ref} ${item.label}`}
+            title={included ? 'Retirer « inclus »' : 'Prestation incluse, sans prix propre'}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={toggleIncluded}
+            className={cx(
+              'absolute top-1/2 left-1 z-[1] inline-flex h-7 -translate-y-1/2 items-center gap-0.5 rounded-[5px] px-1.5 text-[0.75rem] leading-none font-semibold transition-all duration-150 active:scale-95 md:h-6',
+              included ? 'border border-good/60 bg-good-soft text-good' : 'border border-line text-ink-3 hover:border-good/50 hover:bg-good-soft hover:text-good',
+            )}
+          >
+            {included && <Check size={12} strokeWidth={3} className="anim-pop" />}
+            {included ? 'Inclus' : 'Incl.'}
+          </button>
         <input
           ref={sel.ref}
           type="text"
@@ -706,11 +735,11 @@ const PriceRow = memo(function PriceRow({
           data-pidx={idx}
           aria-label={`Prix unitaire, ${item.ref} ${item.label}`}
           title={med != null ? `Médiane des autres offres : ${fmtNum(med)} €` : undefined}
-          className={cx('field num h-10 py-1 text-right text-[1rem] font-medium text-sst md:h-9 md:text-[0.9375rem]', value === 'inclus' && 'text-good italic', strong && 'border-bad/50')}
-          placeholder="PU"
+          className={cx('field num h-10 w-full py-1 pl-12 text-right text-[1rem] font-medium text-sst md:h-9 md:text-[0.9375rem]', included && 'border-good/40 bg-good-soft/40', strong && 'border-bad/50')}
+          placeholder={included ? '' : 'PU'}
           value={display}
           onFocus={() => {
-            setDraft(value === undefined ? '' : value === 'inclus' ? 'inclus' : String(value).replace('.', ','))
+            setDraft(value === undefined || included ? '' : String(value).replace('.', ','))
             sel.request()
           }}
           onMouseUp={sel.onMouseUp}
@@ -719,6 +748,7 @@ const PriceRow = memo(function PriceRow({
           onKeyDown={onKey}
           onPaste={onPaste}
         />
+        </div>
       )}
       <span className="num hidden text-right text-[0.9062rem] md:block">{amount == null ? '' : value === 'inclus' ? 'inclus' : fmtEur2(amount)}</span>
       <span className="hidden text-right md:block">

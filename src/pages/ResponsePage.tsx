@@ -256,7 +256,7 @@ function Response({ c, offer, pid, flush }: { c: Consultation; offer: Offer; pid
           </p>
           {missing > 0 ? (
             <p className="rounded-md bg-warn-soft px-3 py-2 text-warn">
-              {missing} ligne{missing > 1 ? 's ne sont pas chiffrées' : ' n’est pas chiffrée'}. Tapez « i » pour une prestation incluse, ou laissez vide si vous ne la chiffrez pas.
+              {missing} ligne{missing > 1 ? 's ne sont pas chiffrées' : ' n’est pas chiffrée'}. Touchez « Incl. » pour une prestation incluse, ou laissez vide si vous ne la chiffrez pas.
             </p>
           ) : (
             <p className="text-good">Toutes les lignes de base sont renseignées.</p>

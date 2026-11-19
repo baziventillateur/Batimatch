@@ -655,3 +655,12 @@ dialog[open] {
     background-image: none;
   }
 }
+
+/* Petit rebond quand une coche apparaît (bouton « Inclus ») */
+@keyframes pop {
+  0% { transform: scale(0.3); opacity: 0; }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.anim-pop { animation: pop 0.22s ease-out; }
+@media (prefers-reduced-motion: reduce) { .anim-pop { animation: none; } }
