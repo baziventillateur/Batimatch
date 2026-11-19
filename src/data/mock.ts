@@ -11,6 +11,8 @@ export const DEMO_CODE = '123456'
 const pendingSignups = new Map<string, Omit<SignUpInput, 'email' | 'password'>>()
 
 interface Db {
+  /** Codes de verrouillage par projet (démonstration : en clair dans le navigateur) */
+  locks?: Record<string, { code: string; reset?: string }>
   users: { id: string; email: string; password: string }[]
   profiles: ProfileRow[]
   projects: ProjectRow[]
@@ -88,6 +90,10 @@ export function createMockBackend(): Backend {
   }
   const canSeeOffer = (o: OfferRow) => o.company_id === db.session || (isOwner(lotProject(o.lot_id)) && (o.status === 'submitted' || o.source === 'manual'))
   const delay = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(v), 60))
+  /** Projet verrouillé : aucune écriture */
+  const guard = (pid: string) => {
+    if (db.projects.find((p) => p.id === pid)?.locked_at) throw new Error('project_locked')
+  }
   const deny = () => {
     throw new Error('new row violates row-level security policy')
   }
@@ -219,13 +225,71 @@ export function createMockBackend(): Backend {
       save()
       return delay(clone(row))
     },
+    async copyProject(id) {
+      const src = db.projects.find((p) => p.id === id)
+      if (!src || !isOwner(id)) throw new Error('copy_forbidden')
+      const ids = new Map<string, string>()
+      const nid = (k: string) => ids.get(k) ?? (ids.set(k, uid()), ids.get(k)!)
+      const row: ProjectRow = { id: uid(), owner_id: me(), access_code: code(), created_at: now(), name: `${src.name} (copie)`, reference: src.reference, description: src.description }
+      const lots = db.lots.filter((l) => l.project_id === id)
+      const lotIds = new Set(lots.map((l) => l.id))
+      const offers = db.offers.filter((o) => lotIds.has(o.lot_id) && (o.status === 'submitted' || o.source === 'manual'))
+      const kept = new Set(offers.map((o) => o.id))
+      db.projects.push(row)
+      db.lots.push(...lots.map((l) => ({ ...clone(l), id: nid(l.id), project_id: row.id, status: 'draft' as const })))
+      db.offers.push(...offers.map((o) => ({ ...clone(o), id: nid(o.id), lot_id: nid(o.lot_id), company_id: null, source: 'manual' as const, status: 'submitted' as const, submitted_at: null })))
+      db.privates.push(...db.privates.filter((p) => lotIds.has(p.lot_id)).map((p) => ({ ...clone(p), lot_id: nid(p.lot_id), awarded_offer_id: p.awarded_offer_id && kept.has(p.awarded_offer_id) ? nid(p.awarded_offer_id) : null })))
+      db.reviews.push(...db.reviews.filter((r) => kept.has(r.offer_id)).map((r) => ({ ...clone(r), offer_id: nid(r.offer_id), lot_id: nid(r.lot_id) })))
+      db.comments.push(...db.comments.filter((c) => kept.has(c.offer_id)).map((c) => ({ ...clone(c), id: uid(), offer_id: nid(c.offer_id), lot_id: nid(c.lot_id), author_id: me() })))
+      save()
+      return delay(row.id)
+    },
+    async lockProject(id, lockCode) {
+      const p = db.projects.find((x) => x.id === id)
+      if (!p || !isOwner(id)) throw new Error('lock_forbidden')
+      db.locks ??= {}
+      if (!db.locks[id]) {
+        if (!lockCode || lockCode.trim().length < 4) throw new Error('lock_code_required')
+        db.locks[id] = { code: lockCode.trim() }
+      }
+      p.locked_at = now()
+      save()
+    },
+    async unlockProject(id, lockCode) {
+      const p = db.projects.find((x) => x.id === id)
+      if (!p || !isOwner(id)) throw new Error('lock_forbidden')
+      if (db.locks?.[id]?.code !== lockCode.trim()) return delay('wrong' as const)
+      p.locked_at = null
+      save()
+      return delay('ok' as const)
+    },
+    async requestLockReset(id) {
+      if (!isOwner(id) || !db.locks?.[id]) throw new Error('lock_missing')
+      // Démonstration : pas d'e-mail, le code à usage unique est toujours le même
+      db.locks![id].reset = DEMO_CODE
+      save()
+    },
+    async resetLockCode(id, reset, lockCode) {
+      const p = db.projects.find((x) => x.id === id)
+      const k = db.locks?.[id]
+      if (!p || !k || !isOwner(id)) throw new Error('lock_missing')
+      if (lockCode.trim().length < 4) throw new Error('lock_code_required')
+      if (!k.reset) return delay('expired' as const)
+      if (k.reset !== reset.trim()) return delay('wrong' as const)
+      db.locks![id] = { code: lockCode.trim() }
+      p.locked_at = null
+      save()
+      return delay('ok' as const)
+    },
     async updateProject(id, patch) {
       if (!isOwner(id)) deny()
+      guard(id)
       Object.assign(db.projects.find((p) => p.id === id)!, patch)
       save()
     },
     async deleteProject(id) {
       if (!isOwner(id)) deny()
+      guard(id)
       const lots = new Set(db.lots.filter((l) => l.project_id === id).map((l) => l.id))
       db.projects = db.projects.filter((p) => p.id !== id)
       db.members = db.members.filter((m) => m.project_id !== id)
@@ -316,6 +380,7 @@ export function createMockBackend(): Backend {
 
     async createLot(input) {
       if (!isOwner(input.project_id)) deny()
+      guard(input.project_id)
       const row: LotRow = { id: input.id ?? uid(), created_at: now(), updated_at: now(), status: 'draft', ...input }
       db.lots.push(row)
       save()
@@ -323,11 +388,13 @@ export function createMockBackend(): Backend {
     },
     async updateLot(id, patch) {
       if (!isOwner(lotProject(id))) deny()
+      guard(lotProject(id))
       Object.assign(db.lots.find((l) => l.id === id)!, patch, { updated_at: now() })
       save()
     },
     async deleteLot(id) {
       if (!isOwner(lotProject(id))) deny()
+      guard(lotProject(id))
       db.lots = db.lots.filter((l) => l.id !== id)
       db.privates = db.privates.filter((p) => p.lot_id !== id)
       db.access = db.access.filter((a) => a.lot_id !== id)
@@ -338,6 +405,7 @@ export function createMockBackend(): Backend {
     },
     async upsertLotPrivate(row) {
       if (!isOwner(lotProject(row.lot_id))) deny()
+      guard(lotProject(row.lot_id))
       db.privates = [...db.privates.filter((p) => p.lot_id !== row.lot_id), clone(row)]
       save()
     },
@@ -353,6 +421,7 @@ export function createMockBackend(): Backend {
     },
     async decideLotAccess(lotId, userId, status) {
       if (!isOwner(lotProject(lotId))) deny()
+      guard(lotProject(lotId))
       const a = db.access.find((x) => x.lot_id === lotId && x.user_id === userId)
       if (a && a.status !== status) {
         if (a.status === 'pending') for (const n of db.notifications) if (n.kind === 'access_requested' && n.lot_id === lotId && n.actor_id === userId && !n.read_at) n.read_at = now()
@@ -475,6 +544,7 @@ export function createMockBackend(): Backend {
     },
 
     async upsertOffer(row) {
+      guard(lotProject(row.lot_id))
       const uidMe = me()
       const existing = db.offers.find((o) => o.id === row.id)
       const pid = lotProject(row.lot_id)
@@ -516,6 +586,7 @@ export function createMockBackend(): Backend {
     async deleteOffer(id) {
       const o = db.offers.find((x) => x.id === id)
       if (!o) return
+      guard(lotProject(o.lot_id))
       const ok = (o.source === 'manual' && isOwner(lotProject(o.lot_id))) || (o.company_id === db.session && o.status === 'draft')
       if (!ok) deny()
       db.offers = db.offers.filter((x) => x.id !== id)

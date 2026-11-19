@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ProjectLockDialog, type LockMode } from '../components/ProjectLock'
 import { REFRESH_EVENT } from '../components/Bell'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Check, ChevronLeft, ChevronRight, Clock, Copy, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, UserMinus, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Clock, Copy, CopyPlus, LockOpen, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, UserMinus, X } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import { useAuth } from '../data/auth'
 import type { ProjectBundle } from '../data/backend'
@@ -49,6 +50,29 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
   const nav = useNavigate()
   const [editing, setEditing] = useState(false)
   const [addingLot, setAddingLot] = useState(false)
+  const [lockMode, setLockMode] = useState<LockMode>(null)
+  const [busy, setBusy] = useState(false)
+  const locked = !!b.project.locked_at
+  const lock = async () => {
+    try {
+      // Le code existe déjà : un clic suffit. Sinon, on le fait choisir.
+      await api.lockProject(b.project.id)
+      reload()
+    } catch (e) {
+      if (/lock_code_required/.test(e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e))) setLockMode('set')
+      else alert(errorMessage(e))
+    }
+  }
+  const duplicate = async () => {
+    setBusy(true)
+    try {
+      nav(`/p/${await api.copyProject(b.project.id)}`)
+    } catch (e) {
+      alert(errorMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
   const submitted = b.offers.filter((o) => o.status === 'submitted' || o.source === 'manual')
 
   return (
@@ -60,20 +84,38 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
       <section className="cartouche" aria-label="Projet">
         <div className="flex items-start justify-between gap-3 border-b border-ink/25 px-4 py-3 sm:px-5">
           <div className="min-w-0">
-            <h1 className="font-title text-[1.875rem] leading-[1.05] font-bold sm:text-[2.25rem]">{b.project.name}</h1>
+            <h1 className="font-title text-[1.875rem] leading-[1.05] font-bold sm:text-[2.25rem]">
+              {locked && <Lock size={22} className="mr-2 inline align-[-2px] text-warn" aria-label="Projet verrouillé" />}
+              {b.project.name}
+            </h1>
             <p className="mt-1 text-[0.9062rem] text-ink-2">{b.project.reference || 'Sans référence'}</p>
           </div>
           <Menu label="Actions sur le projet" icon={<MoreHorizontal size={18} />}>
             {(close) => (
               <>
-                <MenuItem icon={<Pencil />} onClick={() => (close(), setEditing(true))}>
-                  Modifier le projet
+                {!locked && (
+                  <MenuItem icon={<Pencil />} onClick={() => (close(), setEditing(true))}>
+                    Modifier le projet
+                  </MenuItem>
+                )}
+                <MenuItem icon={<CopyPlus />} onClick={() => (close(), duplicate())}>
+                  Dupliquer le projet
                 </MenuItem>
+                {locked ? (
+                  <MenuItem icon={<LockOpen />} onClick={() => (close(), setLockMode('unlock'))}>
+                    Déverrouiller…
+                  </MenuItem>
+                ) : (
+                  <MenuItem icon={<Lock />} onClick={() => (close(), lock())}>
+                    Verrouiller le projet
+                  </MenuItem>
+                )}
                 <MenuItem
                   icon={<Trash2 />}
                   danger
                   onClick={async () => {
                     close()
+                    if (locked) return alert('Ce projet est verrouillé : déverrouillez-le avant de le supprimer.')
                     if (!confirm(`Supprimer « ${b.project.name} », ses lots et toutes les offres reçues ? Cette action est définitive.`)) return
                     try {
                       await api.deleteProject(b.project.id)
@@ -105,7 +147,35 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
         </dl>
       </section>
 
-      {b.project.is_example ? <ExampleBanner projectId={b.project.id} /> : <InvitePanel code={b.project.access_code} projectName={b.project.name} />}
+      {locked ? (
+        <section className="flex items-start gap-2.5 rounded-md border border-warn/30 bg-warn-soft/60 px-3.5 py-2.5 sm:px-5" aria-label="Projet verrouillé">
+          <Lock size={17} className="mt-0.5 shrink-0 text-warn" />
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+            <p className="min-w-0 flex-1 basis-[16rem] text-[0.875rem]">
+              <strong className="font-semibold">Projet verrouillé</strong> depuis le {fmtDate(b.project.locked_at!.slice(0, 10))} : tout se consulte, rien ne se modifie. Pour faire des essais, dupliquez-le.
+            </p>
+            <span className="flex gap-1.5">
+              <Button size="sm" icon={busy ? <Spinner /> : <CopyPlus size={14} />} disabled={busy} onClick={duplicate}>
+                Dupliquer
+              </Button>
+              <Button size="sm" variant="primary" icon={<LockOpen size={14} />} onClick={() => setLockMode('unlock')}>
+                Déverrouiller
+              </Button>
+            </span>
+          </div>
+        </section>
+      ) : b.project.is_example ? (
+        <ExampleBanner projectId={b.project.id} />
+      ) : (
+        <InvitePanel code={b.project.access_code} projectName={b.project.name} />
+      )}
+      <ProjectLockDialog
+        projectId={b.project.id}
+        projectName={b.project.name}
+        mode={lockMode}
+        onClose={() => setLockMode(null)}
+        onDone={() => (setLockMode(null), reload())}
+      />
 
       <Companies b={b} reload={reload} />
 
@@ -114,9 +184,11 @@ function BuyerProject({ b, reload }: { b: ProjectBundle; reload: () => void }) {
           <h2 id="lots-title" className="font-title text-[1.625rem] font-semibold">
             Lots et demandes d’offre
           </h2>
-          <Button variant="primary" icon={<Plus size={18} />} onClick={() => setAddingLot(true)}>
-            Nouveau lot
-          </Button>
+          {!locked && (
+            <Button variant="primary" icon={<Plus size={18} />} onClick={() => setAddingLot(true)}>
+              Nouveau lot
+            </Button>
+          )}
         </div>
         {b.lots.length > 0 && (
           <p className="-mt-1 flex flex-wrap gap-x-3.5 gap-y-1 text-[0.75rem] text-ink-3" aria-label="Légende des états">
@@ -271,6 +343,7 @@ function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload:
   const companies = [...new Map(offers.map((o) => [o.company_name.toLowerCase(), o])).values()]
   const signal = lotSignal(status, days, offers.length, !!priv?.awarded_offer_id && offers.some((o) => o.id === priv.awarded_offer_id))
   const dim = signal === 'closed' || signal === 'awarded'
+  const locked = !!b.project.locked_at
 
   return (
     <li className={cx('relative border-b border-line-2 last:border-0', signal === 'draft' && 'bg-paper/50', signal === 'late' && 'bg-bad-soft/30')}>
@@ -324,7 +397,7 @@ function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload:
             </span>
           )}
         </span>
-        <span className="flex items-center gap-1.5">
+        <span className={cx('flex items-center gap-1.5', locked && 'hidden')}>
           {status === 'draft' && (
             <Button size="sm" variant="primary" icon={<Send size={14} />} disabled={busy} onClick={() => setStatus('published')}>
               Publier

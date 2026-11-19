@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, KeyRound, Plus, Sparkles } from 'lucide-react'
+import { ArrowRight, KeyRound, Lock, Plus, Sparkles } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import { pendingCode, useAuth } from '../data/auth'
 import type { ProjectListItem } from '../data/backend'
@@ -138,6 +138,11 @@ function ProjectCard({ it }: { it: ProjectListItem }) {
           <div className="min-w-0">
             <h3 className="truncate text-[1.1875rem] font-semibold">{it.project.name}</h3>
             <p className="truncate text-[0.8438rem] text-ink-3">
+              {it.project.locked_at && (
+                <span className="mr-1.5 inline-flex items-center gap-1 rounded-[3px] bg-warn-soft px-1.5 py-px text-[0.75rem] font-semibold text-warn">
+                  <Lock size={11} /> Verrouillé
+                </span>
+              )}
               {it.project.is_example && <span className="mr-1.5 rounded-[3px] bg-plan-soft px-1.5 py-px text-[0.75rem] font-semibold text-plan">Exemple</span>}
               {it.project.reference || 'Sans référence'}
             </p>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { AlertTriangle, Check, ChevronLeft, EyeOff, FileSpreadsheet, MoreHorizontal, PauseCircle, Pencil, Send, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, EyeOff, FileSpreadsheet, Lock, MoreHorizontal, PauseCircle, Pencil, Send, Trash2 } from 'lucide-react'
 import { useConsultation, useStore } from '../store'
 import { api, errorMessage } from '../data'
 import { useAuth } from '../data/auth'
@@ -102,7 +102,13 @@ export default function ConsultationLayout() {
         <Link to={`/p/${pid}`} className="inline-flex items-center gap-1 text-[0.875rem] text-ink-2 hover:text-ink">
           <ChevronLeft size={16} /> {c.affaire || 'Projet'}
         </Link>
-        <SaveIndicator />
+        {c.locked ? (
+          <Link to={`/p/${pid}`} className="inline-flex items-center gap-1.5 rounded-full bg-warn-soft px-2.5 py-1 text-[0.8125rem] font-semibold text-warn" title="Déverrouiller depuis la page du projet">
+            <Lock size={13} /> Verrouillé, consultation seule
+          </Link>
+        ) : (
+          <SaveIndicator />
+        )}
       </div>
 
       <section className="cartouche" aria-label="Informations du lot">

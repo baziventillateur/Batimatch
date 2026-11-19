@@ -97,8 +97,14 @@ interface State {
 const touch = (c: Consultation): Consultation => ({ ...c, updatedAt: new Date().toISOString() })
 
 export const useStore = create<State>()((set, get) => {
-  const patchC = (cid: string, fn: (c: Consultation) => Consultation) =>
+  // Projet verrouillé : aucune modification, on prévient l'utilisateur
+  const refuse = () => {
+    window.dispatchEvent(new Event('batimatch:locked'))
+  }
+  const patchC = (cid: string, fn: (c: Consultation) => Consultation) => {
+    if (get().consultations.find((c) => c.id === cid)?.locked) return refuse()
     set((s) => ({ consultations: s.consultations.map((c) => (c.id === cid ? touch(fn(c)) : c)) }))
+  }
   const patchO = (cid: string, oid: string, fn: (o: Offer) => Offer) =>
     patchC(cid, (c) => ({ ...c, offers: c.offers.map((o) => (o.id === oid ? fn(o) : o)) }))
 
@@ -193,6 +199,10 @@ export const useStore = create<State>()((set, get) => {
     setReviews: (list) => set((s) => ({ reviews: { ...s.reviews, ...Object.fromEntries(list.map((r) => [r.offerId, r])) } })),
     setReview: (offerId, patch) => {
       const cur = get().reviews[offerId] ?? { offerId, scores: {}, verdict: null }
+      if (get().consultations.some((c) => c.locked && c.offers.some((o) => o.id === offerId))) {
+        refuse()
+        return cur
+      }
       const next: Review = { ...cur, ...patch, scores: { ...cur.scores, ...(patch.scores ?? {}) } }
       set((s) => ({ reviews: { ...s.reviews, [offerId]: next } }))
       return next

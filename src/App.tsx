@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './data/auth'
 import { api, errorMessage } from './data'
 import { Button, CompanyLogo, Dialog, Field, IconButton, Loading, Menu, MenuItem } from './components/ui'
 import { useTheme } from './lib/theme'
+import { LockedToast } from './components/ProjectLock'
 import { Bell } from './components/Bell'
 import AuthPage from './pages/AuthPage'
 import Home from './pages/Home'
@@ -189,6 +190,7 @@ export default function App() {
     <HashRouter>
       <AuthProvider>
         <Shell />
+        <LockedToast />
         <PasswordRecovery />
       </AuthProvider>
     </HashRouter>

@@ -267,6 +267,61 @@ await as(A, `delete from public.sso_requests where id = $1`, [rid])
 assert.equal((await as(A, `select * from public.sso_messages`)).rows.length, 0)
 console.log('✓ demandes SSO : dépôt sans compte encadré, traitement réservé à l’administrateur')
 
+// Copie et verrouillage
+await fails(C1, `select public.copy_project('${pid}')`, 'copie par un autre compte')
+const cp = (await as(B, `select public.copy_project($1) as id`, [pid])).rows[0].id
+const cpLots = (await as(B, `select id, status from public.lots where project_id = $1`, [cp])).rows
+const srcLots = (await as(B, `select id from public.lots where project_id = $1`, [pid])).rows
+assert.equal(cpLots.length, srcLots.length, 'tous les lots copiés')
+assert.ok(cpLots.every((l) => l.status === 'draft'), 'lots de la copie en brouillon')
+const cpOffers = (await as(B, `select company_id, source from public.offers where lot_id = any($1)`, [cpLots.map((l) => l.id)])).rows
+assert.ok(cpOffers.length > 0 && cpOffers.every((o) => o.company_id === null && o.source === 'manual'), 'offres copiées détachées des entreprises')
+assert.equal((await as(C1, `select * from public.projects where id = $1`, [cp])).rows.length, 0, 'copie invisible des entreprises')
+assert.equal((await as(B, `select count(*)::int n from public.project_members where project_id = $1`, [cp])).rows[0].n, 0)
+
+await fails(C1, `select public.lock_project('${cp}', '1234')`, 'verrouillage par un autre compte')
+await fails(B, `select public.lock_project('${cp}')`, 'premier verrouillage sans code')
+await fails(B, `select public.lock_project('${cp}', '12')`, 'code trop court')
+await as(B, `select public.lock_project($1, $2)`, [cp, 'trame-2026'])
+assert.ok((await as(B, `select locked_at from public.projects where id = $1`, [cp])).rows[0].locked_at, 'projet verrouillé')
+assert.ok((await as(B, `select * from public.lots where project_id = $1`, [cp])).rows.length > 0, 'consultation toujours possible')
+await fails(B, `update public.projects set name = 'x' where id = '${cp}'`, 'modifier un projet verrouillé')
+await fails(B, `delete from public.projects where id = '${cp}'`, 'supprimer un projet verrouillé')
+await fails(B, `update public.projects set locked_at = null where id = '${cp}'`, 'déverrouiller sans le code')
+await fails(B, `update public.lots set name = 'x' where project_id = '${cp}'`, 'modifier un lot verrouillé')
+await fails(B, `insert into public.lots (project_id, name) values ('${cp}', 'Nouveau')`, 'ajouter un lot à un projet verrouillé')
+await fails(B, `update public.offers set discount_pct = 5 where lot_id = '${cpLots[0].id}'`, 'modifier une offre verrouillée')
+await fails(B, `update public.lot_private set budget = 1 where lot_id = '${cpLots[0].id}'`, 'modifier un budget verrouillé')
+await fails(B, `select * from public.project_locks`, 'lecture du code de verrouillage')
+assert.equal((await as(B, `select public.unlock_project($1, $2) as r`, [cp, 'faux'])).rows[0].r, 'wrong')
+assert.ok((await as(B, `select locked_at from public.projects where id = $1`, [cp])).rows[0].locked_at, 'toujours verrouillé après un code faux')
+await fails(C1, `select public.unlock_project('${cp}', 'trame-2026')`, 'déverrouillage par un autre compte')
+for (let i = 0; i < 4; i++) await as(B, `select public.unlock_project($1, 'faux')`, [cp])
+assert.equal((await as(B, `select public.unlock_project($1, $2) as r`, [cp, 'trame-2026'])).rows[0].r, 'blocked', 'cinq codes faux bloquent les essais')
+await db.exec(`update public.project_locks set failed_at = now() - interval '20 minutes'`)
+assert.equal((await as(B, `select public.unlock_project($1, $2) as r`, [cp, 'trame-2026'])).rows[0].r, 'ok')
+await as(B, `update public.lots set name = name where project_id = $1`, [cp])
+await as(B, `select public.lock_project($1)`, [cp]) // le code existe déjà : un appel suffit
+// Code oublié : code à usage unique, puis nouveau code
+await as(B, `select public.request_lock_reset($1)`, [cp])
+await fails(B, `select public.request_lock_reset('${cp}')`, 'deuxième demande de code trop rapprochée')
+const reset = (await db.query(`select reset_code from public.project_locks where project_id = $1`, [cp])).rows[0].reset_code
+assert.match(reset, /^\d{6}$/)
+assert.equal((await as(B, `select public.reset_lock_code($1, '000000x', 'nouveau1') as r`, [cp])).rows[0].r, 'wrong')
+assert.equal((await as(B, `select public.reset_lock_code($1, $2, 'nouveau1') as r`, [cp, reset])).rows[0].r, 'ok')
+assert.equal((await as(B, `select locked_at from public.projects where id = $1`, [cp])).rows[0].locked_at, null)
+await as(B, `select public.lock_project($1)`, [cp])
+assert.equal((await as(B, `select public.unlock_project($1, 'trame-2026') as r`, [cp])).rows[0].r, 'wrong', 'ancien code refusé')
+assert.equal((await as(B, `select public.unlock_project($1, 'nouveau1') as r`, [cp])).rows[0].r, 'ok')
+// Un projet verrouillé gèle aussi les entreprises
+await as(B, `select public.lock_project($1, 'gel-projet')`, [pid])
+let frozen = 0
+try { frozen = (await as(C1, `update public.offers set discount_pct = 1 where company_id = $1 returning id`, [C1])).rows.length } catch { frozen = 0 }
+assert.equal(frozen, 0, 'offre d’une entreprise gelée sur un projet verrouillé')
+assert.equal((await as(B, `select public.unlock_project($1, 'gel-projet') as r`, [pid])).rows[0].r, 'ok')
+await as(B, `delete from public.projects where id = $1`, [cp])
+console.log('✓ copie de projet, verrouillage par code, code oublié')
+
 // Relance : réservée à l'acheteur, pour une entreprise acceptée sans offre sur un lot ouvert, une fois par 24 h
 const rl = (await as(B, `insert into public.lots (project_id, name, due_date, status, items) values ($1, 'Lot relance', current_date + 5, 'published', '[]') returning id`, [pid])).rows[0].id
 await fails(B, `select public.remind_company('${rl}', '${C2}')`, 'relance sans accès accepté')

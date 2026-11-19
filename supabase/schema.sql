@@ -90,6 +90,8 @@ create table if not exists public.projects (
 
 -- Projet exemple : copie du modèle proposé à chaque acheteur (voir open_example_project plus bas)
 alter table public.projects add column if not exists is_example boolean not null default false;
+-- Projet verrouillé : consultable mais plus modifiable (voir « Copie et verrouillage d'un projet » plus bas)
+alter table public.projects add column if not exists locked_at timestamptz;
 
 create or replace function public.set_access_code()
 returns trigger
@@ -570,6 +572,7 @@ create or replace function public.lot_open(p_lot uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce(
     (select status = 'published' and (due_date is null or due_date >= (now() at time zone 'Europe/Paris')::date)
+            and not exists (select 1 from public.projects p where p.id = project_id and p.locked_at is not null)
        from public.lots where id = p_lot),
     false);
 $$;
@@ -781,6 +784,271 @@ begin
 end;
 $$;
 
+-- ─── Copie et verrouillage d'un projet ──────────────────────────────────────
+-- Verrouillé, un projet reste consultable mais plus rien ne s'y modifie : ni par l'acheteur, ni par les
+-- entreprises. Le blocage est fait ici, dans la base (déclencheurs), pas seulement à l'écran.
+-- Le code de déverrouillage est propre au projet ; seule son empreinte salée est conservée, dans une table
+-- qu'aucun compte ne peut lire. Cinq codes faux bloquent les essais pendant 15 minutes.
+create table if not exists public.project_locks (
+  project_id uuid primary key references public.projects (id) on delete cascade,
+  salt text not null,
+  code_hash text not null,
+  failed_count integer not null default 0,
+  failed_at timestamptz,
+  -- Code oublié : code à usage unique envoyé par e-mail (en clair seulement le temps de l'envoi)
+  reset_hash text,
+  reset_code text,
+  reset_at timestamptz,
+  reset_emailed_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.lock_hash(p_salt text, p_code text)
+returns text language sql immutable set search_path = public as $$
+  select encode(sha256(convert_to(p_salt || ':' || p_code, 'UTF8')), 'hex');
+$$;
+
+create or replace function public.project_locked(p_project uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select locked_at is not null from public.projects where id = p_project), false);
+$$;
+
+-- Refuse toute écriture cliente dans un projet verrouillé (les opérations d'administration, sans compte
+-- connecté, passent : suppression d'un utilisateur, maintenance).
+create or replace function public.guard_locked()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  j jsonb;
+  v_locked boolean;
+begin
+  if auth.uid() is null or current_setting('batimatch.lock_bypass', true) = '1' then
+    return coalesce(new, old);
+  end if;
+  if tg_op = 'DELETE' then j := to_jsonb(old); else j := to_jsonb(new); end if;
+  if tg_table_name = 'projects' then
+    v_locked := tg_op <> 'INSERT' and old.locked_at is not null;
+  elsif tg_table_name in ('lots', 'project_members') then
+    v_locked := public.project_locked((j ->> 'project_id')::uuid);
+  else
+    v_locked := public.project_locked(public.lot_project((j ->> 'lot_id')::uuid));
+  end if;
+  if v_locked then
+    raise exception 'project_locked';
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['projects', 'project_members', 'lots', 'lot_private', 'lot_access', 'offers', 'offer_reviews', 'offer_comments'] loop
+    execute format('drop trigger if exists %I_locked on public.%I', t, t);
+    execute format('create trigger %I_locked before insert or update or delete on public.%I for each row execute function public.guard_locked()', t, t);
+  end loop;
+end $$;
+
+-- Verrouille un projet. Au premier verrouillage, le code est obligatoire (4 caractères au moins) ;
+-- ensuite le même code reste valable et un simple appel suffit.
+create or replace function public.lock_project(p_project uuid, p_code text default null)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_salt text;
+begin
+  if not public.is_project_owner(p_project) then
+    raise exception 'lock_forbidden';
+  end if;
+  if not exists (select 1 from public.project_locks where project_id = p_project) then
+    if p_code is null or length(trim(p_code)) < 4 then
+      raise exception 'lock_code_required';
+    end if;
+    v_salt := gen_random_uuid()::text;
+    insert into public.project_locks (project_id, salt, code_hash) values (p_project, v_salt, public.lock_hash(v_salt, trim(p_code)));
+  end if;
+  perform set_config('batimatch.lock_bypass', '1', true);
+  update public.projects set locked_at = now() where id = p_project and locked_at is null;
+  perform set_config('batimatch.lock_bypass', '', true);
+end;
+$$;
+
+-- Déverrouille avec le code : 'ok', 'wrong' (code faux) ou 'blocked' (trop d'essais, attendre 15 minutes)
+create or replace function public.unlock_project(p_project uuid, p_code text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  k public.project_locks;
+begin
+  if not public.is_project_owner(p_project) then
+    raise exception 'lock_forbidden';
+  end if;
+  select * into k from public.project_locks where project_id = p_project for update;
+  if k.project_id is null then
+    raise exception 'lock_missing';
+  end if;
+  if k.failed_count >= 5 and k.failed_at > now() - interval '15 minutes' then
+    return 'blocked';
+  end if;
+  if public.lock_hash(k.salt, trim(coalesce(p_code, ''))) <> k.code_hash then
+    update public.project_locks
+       set failed_count = case when failed_at > now() - interval '15 minutes' then failed_count + 1 else 1 end, failed_at = now()
+     where project_id = p_project;
+    return 'wrong';
+  end if;
+  update public.project_locks set failed_count = 0, failed_at = null where project_id = p_project;
+  perform set_config('batimatch.lock_bypass', '1', true);
+  update public.projects set locked_at = null where id = p_project;
+  perform set_config('batimatch.lock_bypass', '', true);
+  return 'ok';
+end;
+$$;
+
+-- Code oublié : envoie à l'acheteur, par e-mail, un code à 6 chiffres valable 30 minutes
+create or replace function public.request_lock_reset(p_project uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := lpad((abs(('x' || substr(md5(gen_random_uuid()::text), 1, 8))::bit(32)::int) % 1000000)::text, 6, '0');
+  v_salt text;
+begin
+  if not public.is_project_owner(p_project) then
+    raise exception 'lock_forbidden';
+  end if;
+  select salt into v_salt from public.project_locks where project_id = p_project;
+  if v_salt is null then
+    raise exception 'lock_missing';
+  end if;
+  if exists (select 1 from public.project_locks where project_id = p_project and reset_at > now() - interval '2 minutes') then
+    raise exception 'lock_reset_recent';
+  end if;
+  update public.project_locks
+     set reset_hash = public.lock_hash(v_salt, v_code), reset_code = v_code, reset_at = now(), reset_emailed_at = null
+   where project_id = p_project;
+  if exists (select 1 from pg_extension where extname = 'pg_net') then
+    perform net.http_post(
+      url := 'https://uhdanxctslncwwmcziba.supabase.co/functions/v1/notify-email',
+      body := jsonb_build_object('lock_reset', p_project),
+      headers := '{"Content-Type": "application/json"}'::jsonb
+    );
+  end if;
+end;
+$$;
+
+-- Avec le code reçu par e-mail : enregistre le nouveau code et déverrouille. 'ok', 'wrong', 'expired' ou 'blocked'.
+create or replace function public.reset_lock_code(p_project uuid, p_reset text, p_code text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  k public.project_locks;
+  v_salt text;
+begin
+  if not public.is_project_owner(p_project) then
+    raise exception 'lock_forbidden';
+  end if;
+  if p_code is null or length(trim(p_code)) < 4 then
+    raise exception 'lock_code_required';
+  end if;
+  select * into k from public.project_locks where project_id = p_project for update;
+  if k.project_id is null then
+    raise exception 'lock_missing';
+  end if;
+  if k.failed_count >= 5 and k.failed_at > now() - interval '15 minutes' then
+    return 'blocked';
+  end if;
+  if k.reset_hash is null or k.reset_at < now() - interval '30 minutes' then
+    return 'expired';
+  end if;
+  if public.lock_hash(k.salt, trim(coalesce(p_reset, ''))) <> k.reset_hash then
+    update public.project_locks
+       set failed_count = case when failed_at > now() - interval '15 minutes' then failed_count + 1 else 1 end, failed_at = now()
+     where project_id = p_project;
+    return 'wrong';
+  end if;
+  v_salt := gen_random_uuid()::text;
+  update public.project_locks
+     set salt = v_salt, code_hash = public.lock_hash(v_salt, trim(p_code)), failed_count = 0, failed_at = null,
+         reset_hash = null, reset_code = null, reset_at = null, updated_at = now()
+   where project_id = p_project;
+  perform set_config('batimatch.lock_bypass', '1', true);
+  update public.projects set locked_at = null where id = p_project;
+  perform set_config('batimatch.lock_bypass', '', true);
+  return 'ok';
+end;
+$$;
+
+-- Copie d'un projet pour l'acheteur : lots (repassés en brouillon), DPGF, budgets, offres remises (détachées
+-- des comptes des entreprises), notes, commentaires et attribution. Les entreprises inscrites ne suivent pas.
+create or replace function public.copy_project(p_project uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  src public.projects;
+  v_new uuid;
+begin
+  if not public.is_project_owner(p_project) then
+    raise exception 'copy_forbidden';
+  end if;
+  select * into src from public.projects where id = p_project;
+  insert into public.projects (owner_id, name, reference, description)
+  values (v_uid, left(src.name, 180) || ' (copie)', src.reference, src.description)
+  returning id into v_new;
+
+  insert into public.lots (id, project_id, name, code, description, due_date, status, items, position)
+  select md5(v_new::text || ':' || l.id::text)::uuid, v_new, l.name, l.code, l.description, l.due_date, 'draft', l.items, l.position
+  from public.lots l where l.project_id = p_project;
+
+  insert into public.offers (id, lot_id, company_id, source, status, version, company_name, contact_first_name, contact_last_name,
+                             contact_email, contact_phone, logo_url, received_at, prices, discount_pct, extras, duration_weeks,
+                             valid_until, reserves, message, submitted_at)
+  select md5(v_new::text || ':' || o.id::text)::uuid, md5(v_new::text || ':' || o.lot_id::text)::uuid, null, 'manual', 'submitted',
+         o.version, o.company_name, o.contact_first_name, o.contact_last_name, o.contact_email, o.contact_phone, o.logo_url,
+         o.received_at, o.prices, o.discount_pct, o.extras, o.duration_weeks, o.valid_until, o.reserves, o.message, null
+  from public.offers o join public.lots l on l.id = o.lot_id
+  where l.project_id = p_project and (o.status = 'submitted' or o.source = 'manual');
+
+  insert into public.lot_private (lot_id, budget, budget_prices, settings, awarded_offer_id)
+  select md5(v_new::text || ':' || lp.lot_id::text)::uuid, lp.budget, lp.budget_prices, lp.settings,
+         case when exists (select 1 from public.offers o where o.id = lp.awarded_offer_id and (o.status = 'submitted' or o.source = 'manual'))
+              then md5(v_new::text || ':' || lp.awarded_offer_id::text)::uuid end
+  from public.lot_private lp join public.lots l on l.id = lp.lot_id
+  where l.project_id = p_project
+  on conflict (lot_id) do update set budget = excluded.budget, budget_prices = excluded.budget_prices,
+                                      settings = excluded.settings, awarded_offer_id = excluded.awarded_offer_id;
+
+  insert into public.offer_reviews (offer_id, lot_id, scores, verdict)
+  select md5(v_new::text || ':' || r.offer_id::text)::uuid, md5(v_new::text || ':' || r.lot_id::text)::uuid, r.scores, r.verdict
+  from public.offer_reviews r join public.lots l on l.id = r.lot_id
+  where l.project_id = p_project and exists (select 1 from public.offers o where o.id = md5(v_new::text || ':' || r.offer_id::text)::uuid);
+
+  insert into public.offer_comments (offer_id, lot_id, author_id, body, created_at)
+  select md5(v_new::text || ':' || c.offer_id::text)::uuid, md5(v_new::text || ':' || c.lot_id::text)::uuid, v_uid, c.body, c.created_at
+  from public.offer_comments c join public.lots l on l.id = c.lot_id
+  where l.project_id = p_project and exists (select 1 from public.offers o where o.id = md5(v_new::text || ':' || c.offer_id::text)::uuid);
+
+  return v_new;
+end;
+$$;
+
 -- ─── Activation de la sécurité au niveau des lignes ─────────────────────────
 alter table public.profiles enable row level security;
 alter table public.projects enable row level security;
@@ -794,6 +1062,7 @@ alter table public.sso_messages enable row level security;
 alter table public.offers enable row level security;
 alter table public.offer_reviews enable row level security;
 alter table public.offer_comments enable row level security;
+alter table public.project_locks enable row level security; -- aucune règle : lue seulement par les fonctions de verrouillage
 alter table public.example_template enable row level security; -- aucune règle : lu seulement par open_example_project()
 
 -- On repart de règles propres à chaque exécution
@@ -953,6 +1222,19 @@ grant usage on schema public to anon;
 grant execute on function public.request_sso(text, text, text, text, text, text, text) to anon, authenticated;
 revoke all on function public.join_project(text) from public;
 grant execute on function public.join_project(text) to authenticated;
+revoke all on public.project_locks from authenticated, anon;
+revoke all on function public.lock_hash(text, text) from public, anon, authenticated;
+revoke all on function public.guard_locked() from public, anon, authenticated;
+revoke all on function public.lock_project(uuid, text) from public, anon;
+grant execute on function public.lock_project(uuid, text) to authenticated;
+revoke all on function public.unlock_project(uuid, text) from public, anon;
+grant execute on function public.unlock_project(uuid, text) to authenticated;
+revoke all on function public.request_lock_reset(uuid) from public, anon;
+grant execute on function public.request_lock_reset(uuid) to authenticated;
+revoke all on function public.reset_lock_code(uuid, text, text) from public, anon;
+grant execute on function public.reset_lock_code(uuid, text, text) to authenticated;
+revoke all on function public.copy_project(uuid) from public, anon;
+grant execute on function public.copy_project(uuid) to authenticated;
 revoke all on function public.remind_company(uuid, uuid) from public, anon;
 grant execute on function public.remind_company(uuid, uuid) to authenticated;
 revoke all on function public.lot_reminders(uuid) from public, anon;

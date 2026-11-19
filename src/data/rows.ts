@@ -37,6 +37,8 @@ export interface ProjectRow {
   created_at: string
   /** Projet exemple (copie du modèle proposé à chaque acheteur) */
   is_example?: boolean
+  /** Date de verrouillage : le projet se consulte mais ne se modifie plus */
+  locked_at?: string | null
 }
 
 /** draft = invisible des entreprises ; published = ouvert ; suspended = visible mais gelé */
@@ -295,12 +297,13 @@ export const toSettings = (s: Partial<CompareSettings> | null | undefined): Comp
   extrasRetained: s?.extrasRetained ?? {},
 })
 
-export function toConsultation(lot: LotRow, project: Pick<ProjectRow, 'name'> | null, priv: LotPrivateRow | null, offers: OfferRow[]): Consultation {
+export function toConsultation(lot: LotRow, project: Pick<ProjectRow, 'name' | 'locked_at'> | null, priv: LotPrivateRow | null, offers: OfferRow[]): Consultation {
   return {
     id: lot.id,
     projectId: lot.project_id,
     name: lot.name,
     affaire: project?.name ?? '',
+    locked: !!project?.locked_at,
     lot: lot.code ?? '',
     dueDate: lot.due_date,
     status: lot.status ?? 'published',

@@ -159,6 +159,21 @@ export function createSupabaseBackend(): Backend {
     async removeMember(projectId, userId) {
       check(await sb.from('project_members').delete().eq('project_id', projectId).eq('user_id', userId))
     },
+    async copyProject(id) {
+      return check(await sb.rpc('copy_project', { p_project: id })) as string
+    },
+    async lockProject(id, code) {
+      check(await sb.rpc('lock_project', { p_project: id, p_code: code ?? null }))
+    },
+    async unlockProject(id, code) {
+      return check(await sb.rpc('unlock_project', { p_project: id, p_code: code })) as 'ok' | 'wrong' | 'blocked'
+    },
+    async requestLockReset(id) {
+      check(await sb.rpc('request_lock_reset', { p_project: id }))
+    },
+    async resetLockCode(id, reset, code) {
+      return check(await sb.rpc('reset_lock_code', { p_project: id, p_reset: reset, p_code: code })) as 'ok' | 'wrong' | 'expired' | 'blocked'
+    },
     async openExampleProject() {
       return check(await sb.rpc('open_example_project')) as string
     },

@@ -140,6 +140,8 @@ export interface Consultation {
   name: string
   /** Nom du projet, affiché en en-tête */
   affaire: string
+  /** Projet verrouillé : consultation seule */
+  locked?: boolean
   /** Code du lot (ex. « Lot 01 – VRD ») */
   lot: string
   /** Date limite de remise des offres (AAAA-MM-JJ) */

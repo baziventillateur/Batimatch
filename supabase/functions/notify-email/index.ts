@@ -1,6 +1,7 @@
 // Envoi des e-mails Batimatch :
 //   • alertes (demande d'accès reçue, accès accepté, relance d'une entreprise, demande de connexion SSO pour l'administrateur) ;
-//   • messages aux entreprises qui demandent le SSO (accusé de réception, réponses de l'administrateur).
+//   • messages aux entreprises qui demandent le SSO (accusé de réception, réponses de l'administrateur) ;
+//   • code à usage unique quand l'acheteur a oublié le code de verrouillage d'un projet.
 // Appelée par la base (déclencheurs sur public.notifications et public.sso_messages) avec le seul
 // identifiant de la ligne : la fonction la relit, la marque « envoyée » de façon atomique, puis expédie
 // via Resend. Un appel extérieur ne peut donc ni choisir le destinataire, ni le contenu, ni renvoyer deux fois.
@@ -220,7 +221,8 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method' }, 405)
   const payload = await req.json().catch(() => ({}))
   const ssoId = payload?.sso_message
-  const id = ssoId ?? payload?.id
+  const lockId = payload?.lock_reset
+  const id = ssoId ?? lockId ?? payload?.id
   if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'id' }, 400)
 
   const key = Deno.env.get('RESEND_API_KEY')
@@ -233,6 +235,45 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: FROM, to: [to], reply_to: mail.replyTo ?? REPLY_TO, subject: mail.subject, html: layout(mail), text: mail.text }),
     })
+
+  // Code oublié : le code à usage unique part vers l'acheteur du projet, puis il est effacé de la base
+  if (lockId) {
+    const { data: k } = await sb
+      .from('project_locks')
+      .update({ reset_emailed_at: new Date().toISOString() })
+      .eq('project_id', id)
+      .is('reset_emailed_at', null)
+      .not('reset_code', 'is', null)
+      .gte('reset_at', since)
+      .select('project_id, reset_code')
+      .maybeSingle()
+    if (!k?.reset_code) return json({ sent: false })
+    const { data: pr } = await sb.from('projects').select('name, owner_id').eq('id', id).maybeSingle()
+    const { data: owner } = pr ? await sb.auth.admin.getUserById(pr.owner_id) : { data: null }
+    const to = owner?.user?.email
+    if (!pr || !to) return json({ sent: false })
+    const url = `${SITE}/#/p/${id}`
+    const res = await send(to, {
+      subject: `Votre code pour déverrouiller « ${pr.name} »`,
+      preheader: 'Code à usage unique, valable 30 minutes.',
+      title: 'Code de déverrouillage',
+      subtitle: 'Vous avez indiqué avoir oublié le code de verrouillage d’un projet.',
+      bodyHtml:
+        `<p style="margin:0;font:400 15px/24px ${SANS};color:#46586A;">Saisissez ce code dans Batimatch, puis choisissez un nouveau code de verrouillage :</p>` +
+        `<p style="margin:18px 0 0;padding:16px;background:#F3F5F8;border:1px solid #D3DBE3;border-radius:10px;text-align:center;font:700 34px/40px 'Courier New',monospace;letter-spacing:8px;color:#1B2A3A;">${esc(k.reset_code)}</p>` +
+        facts([['Projet', pr.name]]).replace('<table', '<div style="height:18px;line-height:18px;font-size:0;">&nbsp;</div><table') +
+        p('Ce code est valable 30 minutes et ne sert qu’une fois. Si vous n’êtes pas à l’origine de cette demande, ignorez ce message : le projet reste verrouillé.'),
+      cta: { label: 'Ouvrir le projet', url },
+      reason: 'Vous recevez cet e-mail parce que vous êtes l’acheteur de ce projet sur Batimatch.',
+      text: `Code de déverrouillage du projet « ${pr.name} » : ${k.reset_code}\nValable 30 minutes, à usage unique.\n\nOuvrir le projet : ${url}`,
+    })
+    if (!res.ok) {
+      await sb.from('project_locks').update({ reset_emailed_at: null }).eq('project_id', id)
+      return json({ error: 'resend', status: res.status, detail: await res.text() }, 502)
+    }
+    await sb.from('project_locks').update({ reset_code: null }).eq('project_id', id)
+    return json({ sent: true })
+  }
 
   // Message à une entreprise qui a demandé le SSO : même verrou, le destinataire est celui de la demande
   if (ssoId) {
