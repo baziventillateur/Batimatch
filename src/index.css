@@ -664,3 +664,15 @@ dialog[open] {
 }
 .anim-pop { animation: pop 0.22s ease-out; }
 @media (prefers-reduced-motion: reduce) { .anim-pop { animation: none; } }
+
+/* Pas de zoom au doigt ni au double appui : l'appli se comporte comme une appli installée */
+html,
+body {
+  touch-action: pan-x pan-y;
+}
+@media print {
+  html,
+  body {
+    touch-action: auto;
+  }
+}
