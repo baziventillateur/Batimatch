@@ -676,3 +676,16 @@ body {
     touch-action: auto;
   }
 }
+
+/* L'écran ne glisse jamais de gauche à droite : rien ne dépasse de la largeur du téléphone */
+@media screen {
+  html,
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  body {
+    overscroll-behavior-x: none;
+  }
+}

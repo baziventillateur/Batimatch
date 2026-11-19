@@ -47,11 +47,11 @@ function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; 
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-title text-[2.125rem] leading-none font-bold sm:text-[2.5rem]">Mes projets</h1>
-          <p className="mt-2 text-ink-2">Un projet par affaire ; dans chaque projet, un lot par demande d’offre.</p>
+    <div className="flex min-w-0 flex-col gap-3.5 sm:gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2.5">
+        <div className="min-w-0">
+          <h1 className="font-title text-[1.75rem] leading-none font-bold sm:text-[2.5rem]">Mes projets</h1>
+          <p className="mt-1 text-[0.875rem] text-ink-2 sm:mt-2 sm:text-[0.9375rem]">Un projet par affaire ; dans chaque projet, un lot par demande d’offre.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {!!items?.length && (
@@ -106,7 +106,7 @@ function BuyerHome({ items, error, reload }: { items: ProjectListItem[] | null; 
         </div>
       )}
       {items && items.length > 0 && (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2 md:gap-3">
           {items.map((it) => (
             <ProjectCard key={it.project.id} it={it} />
           ))}
@@ -132,42 +132,43 @@ function ProjectCard({ it }: { it: ProjectListItem }) {
   }, [it.lots])
   const submitted = it.offers.filter((o) => o.status === 'submitted').length
   return (
-    <li>
-      <Link to={`/p/${it.project.id}`} className="panel group flex h-full flex-col gap-4 p-5 transition-colors hover:border-ink-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="truncate text-[1.1875rem] font-semibold">{it.project.name}</h3>
-            <p className="truncate text-[0.8438rem] text-ink-3">
+    <li className="min-w-0">
+      <Link to={`/p/${it.project.id}`} className="panel group relative flex h-full min-w-0 flex-col gap-2.5 overflow-hidden p-3.5 pl-4 sm:p-4 sm:pl-5">
+        <span aria-hidden className={cx('absolute inset-y-0 left-0 w-1', it.project.locked_at ? 'bg-warn' : it.project.is_example ? 'bg-plan/50' : 'bg-plan')} />
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <h3 className="line-clamp-2 text-[1.0625rem] leading-tight font-semibold break-words sm:text-[1.125rem]">{it.project.name}</h3>
+            <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[0.8125rem] text-ink-3">
               {it.project.locked_at && (
-                <span className="mr-1.5 inline-flex items-center gap-1 rounded-[3px] bg-warn-soft px-1.5 py-px text-[0.75rem] font-semibold text-warn">
+                <span className="inline-flex items-center gap-1 rounded-[3px] bg-warn-soft px-1.5 py-px text-[0.75rem] font-semibold text-warn">
                   <Lock size={11} /> Verrouillé
                 </span>
               )}
-              {it.project.is_example && <span className="mr-1.5 rounded-[3px] bg-plan-soft px-1.5 py-px text-[0.75rem] font-semibold text-plan">Exemple</span>}
-              {it.project.reference || 'Sans référence'}
+              {it.project.is_example && <span className="rounded-[3px] bg-plan-soft px-1.5 py-px text-[0.75rem] font-semibold text-plan">Exemple</span>}
+              <span className="min-w-0 truncate">{it.project.reference || 'Sans référence'}</span>
+              {!it.project.is_example && (
+                <span className="num ml-auto shrink-0 rounded-[4px] border border-line bg-paper/70 px-1.5 py-px text-[0.75rem] font-semibold tracking-[0.1em] text-ink-2" title="Code du projet">
+                  {it.project.access_code}
+                </span>
+              )}
             </p>
           </div>
-          {!it.project.is_example && (
-            <span className="num shrink-0 rounded-[4px] border border-ink/70 px-2 py-0.5 text-[0.8125rem] font-semibold tracking-[0.12em]">{it.project.access_code}</span>
-          )}
+          <ArrowRight size={16} className="mt-0.5 shrink-0 text-ink-3 transition-transform group-hover:translate-x-0.5 group-hover:text-plan" aria-hidden />
         </div>
-        <dl className="grid grid-cols-3 gap-3 text-[0.875rem]">
-          <div>
-            <dt className="text-[0.7812rem] text-ink-3">Lots</dt>
-            <dd className="num font-semibold">{it.lots.length}</dd>
+        <dl className="mt-auto grid grid-cols-3 divide-x divide-line/70 rounded-md bg-paper/70 py-1.5 text-center shadow-[inset_0_1px_2px_rgb(27_42_58/0.07)]">
+          <div className="min-w-0 px-1.5">
+            <dd className="num text-[1rem] leading-tight font-semibold">{it.lots.length}</dd>
+            <dt className="truncate text-[0.7188rem] text-ink-3">lot{it.lots.length > 1 ? 's' : ''}</dt>
           </div>
-          <div>
-            <dt className="text-[0.7812rem] text-ink-3">Offres reçues</dt>
-            <dd className="num font-semibold">{submitted}</dd>
+          <div className="min-w-0 px-1.5">
+            <dd className="num text-[1rem] leading-tight font-semibold">{submitted}</dd>
+            <dt className="truncate text-[0.7188rem] text-ink-3">offre{submitted > 1 ? 's' : ''}</dt>
           </div>
-          <div>
-            <dt className="text-[0.7812rem] text-ink-3">Prochaine remise</dt>
-            <dd className={cx('num font-semibold', next != null && next <= 3 && 'text-warn')}>{next == null ? '—' : next === 0 ? 'ce soir' : `J−${next}`}</dd>
+          <div className="min-w-0 px-1.5">
+            <dd className={cx('num text-[1rem] leading-tight font-semibold', next != null && next <= 3 && 'text-warn')}>{next == null ? '—' : next === 0 ? 'ce soir' : `J−${next}`}</dd>
+            <dt className="truncate text-[0.7188rem] text-ink-3">prochaine remise</dt>
           </div>
         </dl>
-        <span className="mt-auto inline-flex items-center gap-1 text-[0.875rem] font-medium text-plan">
-          Ouvrir le projet <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
-        </span>
       </Link>
     </li>
   )
