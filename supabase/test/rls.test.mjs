@@ -322,6 +322,34 @@ assert.equal((await as(B, `select public.unlock_project($1, 'gel-projet') as r`,
 await as(B, `delete from public.projects where id = $1`, [cp])
 console.log('✓ copie de projet, verrouillage par code, code oublié')
 
+// Invitation par l'acheteur : compte existant accepté d'office, adresse inconnue rattachée à sa première connexion
+const il1 = (await as(B, `insert into public.lots (project_id, name, due_date, status, items) values ($1, 'Lot invité 1', current_date + 9, 'published', '[]') returning id`, [pid])).rows[0].id
+const il2 = (await as(B, `insert into public.lots (project_id, name, due_date, status, items) values ($1, 'Lot invité 2', current_date + 9, 'draft', '[]') returning id`, [pid])).rows[0].id
+const c2mail = (await db.query(`select email from auth.users where id = $1`, [C2])).rows[0].email
+await fails(C1, `select public.invite_company('${pid}', 'x@test.fr', array['${il1}']::uuid[])`, 'invitation par une entreprise')
+await fails(B, `select public.invite_company('${pid}', 'pas-une-adresse', array['${il1}']::uuid[])`, 'adresse invalide')
+await fails(B, `select public.invite_company('${pid}', 'x@test.fr', array[]::uuid[])`, 'invitation sans lot')
+assert.equal((await as(B, `select public.invite_company($1, $2, array['${il1}', '${il2}']::uuid[]) as r`, [pid, c2mail.toUpperCase()])).rows[0].r, 'sent')
+assert.equal((await as(C2, `select status from public.lot_access where lot_id = $1 and user_id = $2`, [il1, C2])).rows[0].status, 'approved', 'compte existant accepté d’office')
+assert.equal((await as(B, `select public.invite_company($1, 'nouvelle@entreprise.fr', array['${il2}']::uuid[]) as r`, [pid])).rows[0].r, 'sent')
+assert.equal((await as(B, `select public.invite_company($1, 'nouvelle@entreprise.fr', array['${il1}']::uuid[]) as r`, [pid])).rows[0].r, 'sent')
+const invs = (await as(B, `select email, lot_ids, user_id from public.project_invitations where project_id = $1 order by email`, [pid])).rows
+assert.equal(invs.length, 2)
+assert.equal(invs.find((i) => i.email === 'nouvelle@entreprise.fr').lot_ids.length, 2, 'lots cumulés sur la même adresse')
+assert.equal((await as(C1, `select * from public.project_invitations`)).rows.length, 0, 'invitations invisibles des entreprises')
+await fails(C1, `insert into public.project_invitations (project_id, email) values ('${pid}', 'pirate@test.fr')`, 'invitation fabriquée à la main')
+const NV = '99999999-0000-4000-8000-000000000001'
+await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${NV}', 'nouvelle@entreprise.fr', '{"role":"company","company_name":"Nouvelle SARL"}')`)
+assert.equal((await as(NV, `select public.claim_invitations() as n`)).rows[0].n, 1)
+assert.equal((await as(NV, `select count(*)::int as n from public.lot_access where user_id = $1 and status = 'approved'`, [NV])).rows[0].n, 2)
+assert.equal((await as(C1, `select public.claim_invitations() as n`)).rows[0].n, 0, 'aucune invitation pour une autre adresse')
+// Publication d'un lot en brouillon : les entreprises invitées sont prévenues
+await as(B, `update public.lots set status = 'published' where id = $1`, [il2])
+assert.equal((await as(NV, `select * from public.notifications where kind = 'lot_published'`)).rows.length, 1)
+assert.equal((await as(C2, `select * from public.notifications where kind = 'lot_published'`)).rows.length, 1)
+assert.equal((await as(C1, `select * from public.notifications where kind = 'lot_published'`)).rows.length, 0)
+console.log('✓ invitation : acheteur seulement, lots ouverts d’office, rattachement à la connexion, alerte à la publication')
+
 // Relance : réservée à l'acheteur, pour une entreprise acceptée sans offre sur un lot ouvert, une fois par 24 h
 const rl = (await as(B, `insert into public.lots (project_id, name, due_date, status, items) values ($1, 'Lot relance', current_date + 5, 'published', '[]') returning id`, [pid])).rows[0].id
 await fails(B, `select public.remind_company('${rl}', '${C2}')`, 'relance sans accès accepté')

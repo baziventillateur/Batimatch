@@ -1,4 +1,4 @@
-import type { AccessStatus, CommentRow, NotificationRow, SsoRequestInput, SsoRequestRow, SsoStatus, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, LotStatus, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import type { InvitationRow, AccessStatus, CommentRow, NotificationRow, SsoRequestInput, SsoRequestRow, SsoStatus, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, LotStatus, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 import type { Role, TechNote } from '../lib/types'
 
 export interface SignUpInput {
@@ -101,6 +101,10 @@ export interface Backend {
   undeclineLot(lotId: string): Promise<void>
   /** Acheteur : relance par e-mail une entreprise acceptée qui n'a pas encore répondu. « example » : projet exemple, rien n'est envoyé. */
   remindCompany(lotId: string, userId: string): Promise<'sent' | 'example'>
+  /** Acheteur : invite une adresse e-mail sur des lots du projet (e-mail avec le lien pour répondre) */
+  inviteCompany(projectId: string, email: string, lotIds: string[]): Promise<'sent' | 'example'>
+  /** Acheteur : invitations envoyées sur le projet */
+  listInvitations(projectId: string): Promise<InvitationRow[]>
   /** Acheteur : date de la dernière relance par entreprise sur un lot */
   listLotReminders(lotId: string): Promise<{ user_id: string; last_at: string }[]>
   /** Alertes de la cloche, les plus récentes d'abord */
@@ -135,6 +139,11 @@ export function errorMessage(e: unknown): string {
   if (/sso_busy/.test(raw)) return 'Trop de demandes en ce moment. Réessayez dans une heure ou écrivez à contact@paceapp.fr.'
   if (/sso_email/.test(raw)) return 'Cette adresse e-mail ne semble pas valide.'
   if (/sso_company|sso_contact/.test(raw)) return 'Indiquez le nom de l’entreprise et celui du contact.'
+  if (/invite_email/.test(raw)) return 'Cette adresse e-mail n’est pas valide.'
+  if (/invite_no_lot/.test(raw)) return 'Choisissez au moins un lot.'
+  if (/invite_self/.test(raw)) return 'C’est votre propre adresse : invitez celle de l’entreprise.'
+  if (/invite_limit/.test(raw)) return 'Trop d’invitations en une heure : réessayez un peu plus tard.'
+  if (/invite_forbidden/.test(raw)) return 'Action réservée à l’acheteur du projet.'
   if (/project_locked/.test(raw)) return 'Ce projet est verrouillé : déverrouillez-le depuis la page du projet pour le modifier.'
   if (/lock_reset_recent/.test(raw)) return 'Un code vous a déjà été envoyé par e-mail il y a moins de 2 minutes : utilisez-le, ou réessayez dans un instant.'
   if (/lock_code_required/.test(raw)) return 'Choisissez un code d’au moins 4 caractères.'
@@ -146,7 +155,7 @@ export function errorMessage(e: unknown): string {
   if (/reminder_no_access|reminder_forbidden/.test(raw)) return 'Relance impossible : l’entreprise n’est pas acceptée sur ce lot.'
   if (/example_buyer_only/.test(raw)) return 'Le projet exemple est réservé aux comptes acheteurs.'
   if (/example_missing/.test(raw)) return 'Le projet exemple n’est pas encore installé : exécutez supabase/example.sql dans l’éditeur SQL de Supabase.'
-  if (/copy_project|lock_project|unlock_project|locked_at|remind_company|lot_reminders|open_example_project|is_example|lot_access|notifications|sso_requests|sso_messages|request_sso|tech_note|offer-files|Bucket not found|project_lot_catalog|column .*status.* does not exist|schema cache/i.test(raw)) return 'La base de données doit être mise à jour : relancez supabase/schema.sql dans l’éditeur SQL de Supabase.'
+  if (/invite_company|project_invitations|copy_project|lock_project|unlock_project|locked_at|remind_company|lot_reminders|open_example_project|is_example|lot_access|notifications|sso_requests|sso_messages|request_sso|tech_note|offer-files|Bucket not found|project_lot_catalog|column .*status.* does not exist|schema cache/i.test(raw)) return 'La base de données doit être mise à jour : relancez supabase/schema.sql dans l’éditeur SQL de Supabase.'
   if (/signups not allowed/i.test(raw)) return 'Aucun compte avec cet email. Créez un compte.'
   if (/token has expired|otp_expired|invalid.*otp|otp.*invalid/i.test(raw)) return 'Code incorrect ou expiré. Vérifiez-le ou demandez-en un nouveau.'
   if (/security purposes/i.test(raw)) return 'Patientez une minute avant de redemander un code.'

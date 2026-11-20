@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { AlertTriangle, Check, ChevronLeft, EyeOff, FileSpreadsheet, Lock, MoreHorizontal, PauseCircle, Pencil, Send, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, EyeOff, FileSpreadsheet, Lock, MailPlus, MoreHorizontal, PauseCircle, Pencil, Send, Trash2 } from 'lucide-react'
 import { useConsultation, useStore } from '../store'
 import { api, errorMessage } from '../data'
 import { useAuth } from '../data/auth'
@@ -9,6 +9,7 @@ import { companyKey, linesOf, statusOf, STATUS_LABEL } from '../lib/calc'
 import { daysUntil, fmtDate, fmtEur } from '../lib/format'
 import { exportBlankDpgf } from '../lib/io'
 import type { Consultation } from '../lib/types'
+import { InviteCompanyDialog } from '../components/InviteCompany'
 import { Button, Dialog, ErrorBox, Field, Loading, Menu, MenuItem, NumberInput, Spinner, cx } from '../components/ui'
 
 export const useC = () => useOutletContext<Consultation>()
@@ -54,6 +55,7 @@ export default function ConsultationLayout() {
   const loc = useLocation()
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
+  const [inviting, setInviting] = useState(false)
   const syncRef = useRef<ReturnType<typeof startLotSync> | null>(null)
 
   useEffect(() => {
@@ -124,6 +126,11 @@ export default function ConsultationLayout() {
             <Menu label="Actions sur le lot" icon={<MoreHorizontal size={18} />}>
               {(close) => (
                 <>
+                  {!c.locked && (
+                    <MenuItem icon={<MailPlus />} onClick={() => (close(), setInviting(true))}>
+                      Inviter une entreprise
+                    </MenuItem>
+                  )}
                   <MenuItem icon={<Pencil />} onClick={() => (close(), setEditing(true))}>
                     Modifier le lot
                   </MenuItem>
@@ -241,6 +248,13 @@ export default function ConsultationLayout() {
 
       <Outlet context={c} />
 
+      <InviteCompanyDialog
+        open={inviting}
+        onClose={() => setInviting(false)}
+        projectId={pid!}
+        lots={[{ id: c.id, name: c.name, due_date: c.dueDate, status: c.status }]}
+        preselect={[c.id]}
+      />
       <Dialog open={editing} onClose={() => setEditing(false)} title="Modifier le lot">
         {editing && (
           <LotEditForm

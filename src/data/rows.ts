@@ -56,7 +56,19 @@ export interface LotAccessRow {
   comment?: string | null
 }
 
-export type NotificationKind = 'access_requested' | 'access_approved' | 'access_refused' | 'lot_declined' | 'sso_requested' | 'offer_reminder'
+export type NotificationKind = 'access_requested' | 'access_approved' | 'access_refused' | 'lot_declined' | 'sso_requested' | 'offer_reminder' | 'lot_published'
+
+/** Invitation d'une entreprise par e-mail, sur un ou plusieurs lots */
+export interface InvitationRow {
+  id: string
+  project_id: string
+  email: string
+  lot_ids: string[]
+  /** Compte rattaché : null tant que l'entreprise ne s'est pas connectée */
+  user_id: string | null
+  created_at: string
+  updated_at: string
+}
 
 /** Alerte de la cloche, créée par la base quand une demande d'accès évolue */
 export interface NotificationRow {

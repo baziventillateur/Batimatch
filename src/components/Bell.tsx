@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell as BellIcon, BellRing, Check, CircleSlash, KeyRound, ShieldCheck, UserPlus, X } from 'lucide-react'
+import { Send, Bell as BellIcon, BellRing, Check, CircleSlash, KeyRound, ShieldCheck, UserPlus, X } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import type { NotificationRow } from '../data/rows'
 import { Button, IconButton, cx } from './ui'
@@ -105,7 +105,7 @@ export function Bell() {
       api.markNotificationsRead([n.id]).catch(() => {})
     }
     if (sso) return nav('/admin')
-    nav((n.kind === 'access_approved' || n.kind === 'offer_reminder') && n.lot_id ? `/p/${n.project_id}/l/${n.lot_id}` : `/p/${n.project_id}`)
+    nav((n.kind === 'access_approved' || n.kind === 'offer_reminder' || n.kind === 'lot_published') && n.lot_id ? `/p/${n.project_id}/l/${n.lot_id}` : `/p/${n.project_id}`)
   }
 
   return (
@@ -156,6 +156,7 @@ function Item({ n, busy, onOpen, onDecide }: { n: NotificationRow; busy: boolean
     access_refused: { icon: <X size={16} />, tone: 'bg-bad-soft text-bad', text: <>Votre demande d’accès au lot <strong className="font-semibold">{lot}</strong> n’a pas été retenue.</> },
     sso_requested: { icon: <ShieldCheck size={16} />, tone: 'bg-plan-soft text-plan', text: <><strong className="font-semibold">{company}</strong> demande la connexion SSO</> },
     offer_reminder: { icon: <BellRing size={16} />, tone: 'bg-warn-soft text-warn', text: <><strong className="font-semibold">{d.buyer || 'L’acheteur'}</strong> vous relance : votre offre est attendue pour le lot <strong className="font-semibold">{lot}</strong>{d.due ? <>, avant le {d.due}</> : null}</> },
+    lot_published: { icon: <Send size={16} />, tone: 'bg-good-soft text-good', text: <>La DPGF du lot <strong className="font-semibold">{lot}</strong> est en ligne{d.due ? <>, à remettre avant le {d.due}</> : null}. Vous pouvez répondre.</> },
     lot_declined: { icon: <CircleSlash size={16} />, tone: 'bg-paper text-ink-2', text: <><strong className="font-semibold">{company}</strong> ne répondra pas au lot <strong className="font-semibold">{lot}</strong></> },
   }[n.kind]
   return (

@@ -1,7 +1,7 @@
 // Backend de démonstration en mémoire (stocké dans le navigateur), qui reproduit
 // les règles d'accès de la base Supabase. Sert au développement et aux tests visuels.
 import type { SignUpInput, Backend, OfferLite } from './backend'
-import type { NotificationRow, SsoRequestRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import type { InvitationRow, NotificationRow, SsoRequestRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
 import { uid } from '../lib/id'
 import { EXAMPLE_ACCOUNTS, buildExampleTemplate, materializeExample } from '../lib/example'
 
@@ -11,6 +11,8 @@ export const DEMO_CODE = '123456'
 const pendingSignups = new Map<string, Omit<SignUpInput, 'email' | 'password'>>()
 
 interface Db {
+  /** Invitations envoyées par e-mail (démonstration : aucun e-mail ne part) */
+  invitations?: InvitationRow[]
   /** Codes de verrouillage par projet (démonstration : en clair dans le navigateur) */
   locks?: Record<string, { code: string; reset?: string }>
   users: { id: string; email: string; password: string }[]
@@ -446,6 +448,25 @@ export function createMockBackend(): Backend {
       Object.assign(a, { status: 'approved', comment: null, decided_at: now() })
       save()
       await delay(null)
+    },
+    async inviteCompany(projectId, email, lotIds) {
+      const p = db.projects.find((x) => x.id === projectId)
+      if (!p || !isOwner(projectId)) throw new Error('invite_forbidden')
+      guard(projectId)
+      const mail = email.trim().toLowerCase()
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(mail)) throw new Error('invite_email')
+      const ids = lotIds.filter((id) => db.lots.some((l) => l.id === id && l.project_id === projectId))
+      if (!ids.length) throw new Error('invite_no_lot')
+      if (p.is_example) return delay('example' as const)
+      db.invitations ??= []
+      const cur = db.invitations.find((i) => i.project_id === projectId && i.email === mail)
+      if (cur) Object.assign(cur, { lot_ids: [...new Set([...cur.lot_ids, ...ids])], updated_at: now() })
+      else db.invitations.push({ id: uid(), project_id: projectId, email: mail, lot_ids: ids, user_id: null, created_at: now(), updated_at: now() })
+      save()
+      return delay('sent' as const)
+    },
+    async listInvitations(projectId) {
+      return delay(isOwner(projectId) ? clone((db.invitations ?? []).filter((i) => i.project_id === projectId)) : [])
     },
     async remindCompany(lotId, userId) {
       const l = db.lots.find((x) => x.id === lotId)

@@ -1,7 +1,8 @@
 // Envoi des e-mails Batimatch :
 //   • alertes (demande d'accès reçue, accès accepté, relance d'une entreprise, demande de connexion SSO pour l'administrateur) ;
 //   • messages aux entreprises qui demandent le SSO (accusé de réception, réponses de l'administrateur) ;
-//   • code à usage unique quand l'acheteur a oublié le code de verrouillage d'un projet.
+//   • code à usage unique quand l'acheteur a oublié le code de verrouillage d'un projet ;
+//   • invitation d'une entreprise à répondre à des lots, et avis de mise en ligne d'une DPGF.
 // Appelée par la base (déclencheurs sur public.notifications et public.sso_messages) avec le seul
 // identifiant de la ligne : la fonction la relit, la marque « envoyée » de façon atomique, puis expédie
 // via Resend. Un appel extérieur ne peut donc ni choisir le destinataire, ni le contenu, ni renvoyer deux fois.
@@ -153,6 +154,23 @@ Répondre à la DPGF : ${url}`,
       replyTo: n.data.email && EMAIL_RE.test(n.data.email) ? n.data.email : undefined,
     }
   }
+  if (n.kind === 'lot_published') {
+    const url = `${SITE}/#/p/${n.project_id}/l/${n.lot_id}`
+    const buyer = n.data.buyer || 'L’acheteur'
+    const who = n.data.contact ? `${n.data.contact} (${buyer})` : buyer
+    return {
+      subject: `La DPGF est en ligne : lot ${lot}, ${project}`,
+      preheader: `Vous pouvez saisir votre offre${n.data.due ? ` avant le ${n.data.due}` : ''}.`,
+      title: 'La DPGF est en ligne',
+      subtitle: 'Le lot sur lequel vous êtes invité est ouvert aux réponses.',
+      bodyHtml: facts([['Projet', project], ['Lot', lot], ['Date de remise', n.data.due ?? ''], ['Demandé par', who]]) +
+        p('Saisissez vos prix unitaires dans la DPGF et joignez votre notice technique avant la date de remise. Votre offre reste modifiable jusqu’à cette date.'),
+      cta: { label: 'Répondre à la DPGF', url },
+      reason: 'Vous recevez cet e-mail parce que vous êtes invité sur ce lot dans Batimatch.',
+      text: `La DPGF du lot ${lot} (projet ${project}) est en ligne${n.data.due ? `, à remettre avant le ${n.data.due}` : ''}.\n\nRépondre à la DPGF : ${url}`,
+      replyTo: n.data.email && EMAIL_RE.test(n.data.email) ? n.data.email : undefined,
+    }
+  }
   if (n.kind === 'sso_requested') {
     const url = `${SITE}/#/admin`
     const d = n.data
@@ -222,7 +240,8 @@ Deno.serve(async (req) => {
   const payload = await req.json().catch(() => ({}))
   const ssoId = payload?.sso_message
   const lockId = payload?.lock_reset
-  const id = ssoId ?? lockId ?? payload?.id
+  const invId = payload?.invitation
+  const id = ssoId ?? lockId ?? invId ?? payload?.id
   if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'id' }, 400)
 
   const key = Deno.env.get('RESEND_API_KEY')
@@ -235,6 +254,60 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: FROM, to: [to], reply_to: mail.replyTo ?? REPLY_TO, subject: mail.subject, html: layout(mail), text: mail.text }),
     })
+
+  // Invitation d'une entreprise : le destinataire, le projet et les lots sont relus dans la base
+  if (invId) {
+    const { data: inv } = await sb
+      .from('project_invitations')
+      .update({ emailed_at: new Date().toISOString() })
+      .eq('id', id)
+      .is('emailed_at', null)
+      .gte('updated_at', since)
+      .select('id, project_id, email, lot_ids, user_id')
+      .maybeSingle()
+    if (!inv || !EMAIL_RE.test(inv.email)) return json({ sent: false })
+    const { data: pr } = await sb.from('projects').select('name, access_code, owner_id, is_example').eq('id', inv.project_id).maybeSingle()
+    if (!pr || pr.is_example) return json({ sent: false })
+    const { data: lots } = await sb.from('lots').select('name, due_date, status, position').eq('project_id', inv.project_id).in('id', inv.lot_ids?.length ? inv.lot_ids : ['00000000-0000-0000-0000-000000000000']).order('position')
+    if (!lots?.length) return json({ sent: false })
+    const { data: buyer } = await sb.from('profiles').select('company_name, first_name, last_name, email').eq('id', pr.owner_id).maybeSingle()
+    const company = buyer?.company_name || 'L’acheteur'
+    const contact = `${buyer?.first_name ?? ''} ${buyer?.last_name ?? ''}`.trim()
+    const who = contact ? `${contact} (${company})` : company
+    const day = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : '')
+    const online = lots.filter((l) => l.status !== 'draft')
+    const drafts = lots.length - online.length
+    const many = lots.length > 1
+    const url = `${SITE}/#/rejoindre/${pr.access_code}`
+    const lotRows = lots
+      .map((l) => `<tr><td style="padding:8px 0;border-top:1px solid #D3DBE3;font:700 15px/21px ${SANS};color:#1B2A3A;">${esc(l.name || 'Lot')}</td><td align="right" style="padding:8px 0 8px 12px;border-top:1px solid #D3DBE3;font:400 13px/21px ${SANS};color:#46586A;white-space:nowrap;">${l.status === 'draft' ? 'DPGF bientôt en ligne' : l.due_date ? `à remettre le ${esc(day(l.due_date))}` : 'DPGF en ligne'}</td></tr>`)
+      .join('')
+    const steps = inv.user_id
+      ? `Connectez-vous à Batimatch : ${many ? 'ces lots vous sont déjà ouverts' : 'ce lot vous est déjà ouvert'}, sans demande d’accès.`
+      : `Créez votre compte entreprise avec cette adresse e-mail (deux minutes) : ${many ? 'ces lots vous seront ouverts' : 'ce lot vous sera ouvert'} directement, sans demande d’accès.`
+    const res = await send(inv.email, {
+      subject: `${company} vous invite à répondre : ${pr.name}`,
+      preheader: `${many ? `${lots.length} lots` : `Lot ${lots[0].name}`} à chiffrer sur Batimatch.`,
+      title: 'Vous êtes invité à répondre',
+      subtitle: `${who} vous consulte sur Batimatch.`,
+      bodyHtml:
+        facts([['Projet', pr.name], ['Demandé par', who]]) +
+        `<div style="height:14px;line-height:14px;font-size:0;">&nbsp;</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td colspan="2" style="padding:0 0 6px;font:400 13px/20px ${SANS};color:#75838F;">${many ? 'Lots à chiffrer' : 'Lot à chiffrer'}</td></tr>${lotRows}</table>` +
+        p(esc(steps)) +
+        (online.length ? p('Vous y saisissez vos prix unitaires dans la DPGF et joignez votre notice technique, avant la date de remise.') : '') +
+        (drafts ? p(`${drafts === lots.length ? 'La DPGF n’est pas encore en ligne' : 'Une partie des DPGF n’est pas encore en ligne'} : vous recevrez un e-mail dès sa publication. D’ici là, vous pouvez déjà vous connecter.`) : '') +
+        p('Si vous ne souhaitez pas répondre, indiquez-le sur la page du lot : l’acheteur en sera informé.'),
+      cta: { label: inv.user_id ? 'Ouvrir le projet' : 'Créer mon compte et répondre', url },
+      reason: `Vous recevez cet e-mail parce que ${company} vous a invité à répondre à une consultation sur Batimatch.`,
+      text: `${who} vous invite à répondre sur Batimatch.\nProjet : ${pr.name}\n${lots.map((l) => `- ${l.name}${l.status === 'draft' ? ' (DPGF bientôt en ligne)' : l.due_date ? ` (à remettre le ${day(l.due_date)})` : ''}`).join('\n')}\n\n${steps}\n\n${url}`,
+      replyTo: buyer?.email && EMAIL_RE.test(buyer.email) ? buyer.email : undefined,
+    })
+    if (!res.ok) {
+      await sb.from('project_invitations').update({ emailed_at: null }).eq('id', id)
+      return json({ error: 'resend', status: res.status, detail: await res.text() }, 502)
+    }
+    return json({ sent: true })
+  }
 
   // Code oublié : le code à usage unique part vers l'acheteur du projet, puis il est effacé de la base
   if (lockId) {
@@ -302,7 +375,7 @@ Deno.serve(async (req) => {
     .update({ emailed_at: new Date().toISOString() })
     .eq('id', id)
     .is('emailed_at', null)
-    .in('kind', ['access_requested', 'access_approved', 'sso_requested', 'offer_reminder'])
+    .in('kind', ['access_requested', 'access_approved', 'sso_requested', 'offer_reminder', 'lot_published'])
     .gte('created_at', since)
     .select('id, user_id, kind, project_id, lot_id, data')
     .maybeSingle()

@@ -168,7 +168,7 @@ alter table public.lot_access add constraint lot_access_status_check check (stat
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
-  kind text not null check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested', 'offer_reminder')),
+  kind text not null check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested', 'offer_reminder', 'lot_published')),
   project_id uuid references public.projects (id) on delete cascade,
   lot_id uuid references public.lots (id) on delete cascade,
   -- Celui qui a provoqué l'alerte (l'entreprise qui demande, l'acheteur qui décide)
@@ -184,7 +184,7 @@ create index if not exists notifications_user_idx on public.notifications (user_
 -- Mise à jour pour les bases déjà créées : alertes « demande de connexion SSO » (administrateur) et « relance » (entreprise)
 alter table public.notifications drop constraint if exists notifications_kind_check;
 alter table public.notifications add constraint notifications_kind_check
-  check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested', 'offer_reminder'));
+  check (kind in ('access_requested', 'access_approved', 'access_refused', 'lot_declined', 'sso_requested', 'offer_reminder', 'lot_published'));
 
 create or replace function public.notify_lot_access()
 returns trigger
@@ -260,7 +260,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.kind in ('access_requested', 'access_approved', 'sso_requested', 'offer_reminder')
+  if new.kind in ('access_requested', 'access_approved', 'sso_requested', 'offer_reminder', 'lot_published')
      and exists (select 1 from pg_extension where extname = 'pg_net') then
     perform net.http_post(
       url := 'https://uhdanxctslncwwmcziba.supabase.co/functions/v1/notify-email',
@@ -618,6 +618,8 @@ begin
   if not public.is_project_owner(v_project) then
     insert into public.project_members (project_id, user_id) values (v_project, auth.uid())
     on conflict do nothing;
+    -- Invitations de l'acheteur à cette adresse : les lots sont ouverts d'office
+    perform public.claim_invitations();
   end if;
   return v_project;
 end;
@@ -1327,3 +1329,200 @@ create policy offer_files_update on storage.objects for update to authenticated
   with check (bucket_id = 'offer-files' and public.offer_file_writable(name));
 create policy offer_files_delete on storage.objects for delete to authenticated
   using (bucket_id = 'offer-files' and public.offer_file_writable(name));
+
+-- ─── Invitation d'une entreprise par l'acheteur ─────────────────────────────
+-- L'acheteur invite une adresse e-mail sur un ou plusieurs lots. Un e-mail part vers l'entreprise
+-- (texte fixe, composé par la fonction d'envoi). Si elle a déjà un compte, elle est rattachée au projet
+-- et acceptée d'office sur ces lots ; sinon l'invitation attend : à sa première connexion avec cette
+-- adresse (vérifiée), les lots lui sont ouverts. Un lot encore en brouillon reste invisible : l'entreprise
+-- est prévenue par e-mail dès sa publication.
+create table if not exists public.project_invitations (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects (id) on delete cascade,
+  email text not null,
+  lot_ids uuid[] not null default '{}',
+  invited_by uuid references auth.users (id) on delete set null,
+  -- Compte rattaché (null tant que l'entreprise ne s'est pas connectée)
+  user_id uuid references auth.users (id) on delete set null,
+  emailed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_id, email)
+);
+create index if not exists project_invitations_email_idx on public.project_invitations (email);
+
+-- Rattache une invitation à un compte : membre du projet, accepté sur les lots invités
+create or replace function public.apply_invitation(p_inv uuid, p_user uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  inv public.project_invitations;
+begin
+  select * into inv from public.project_invitations where id = p_inv;
+  if inv.id is null or exists (select 1 from public.projects where id = inv.project_id and owner_id = p_user) then
+    return;
+  end if;
+  perform set_config('batimatch.lock_bypass', '1', true);
+  insert into public.project_members (project_id, user_id) values (inv.project_id, p_user) on conflict do nothing;
+  insert into public.lot_access (lot_id, user_id, status, decided_at)
+  select l.id, p_user, 'approved', now() from public.lots l where l.project_id = inv.project_id and l.id = any (inv.lot_ids)
+  on conflict (lot_id, user_id) do update set status = 'approved', decided_at = now()
+    where public.lot_access.status in ('pending', 'refused');
+  update public.project_invitations set user_id = p_user where id = p_inv;
+  perform set_config('batimatch.lock_bypass', '', true);
+end;
+$$;
+
+-- À la connexion : ouvre les lots des invitations envoyées à l'adresse (vérifiée) du compte. Renvoie leur nombre.
+create or replace function public.claim_invitations()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_email text;
+  r record;
+  n integer := 0;
+begin
+  if v_uid is null then
+    return 0;
+  end if;
+  select lower(email) into v_email from auth.users where id = v_uid and email_confirmed_at is not null;
+  if v_email is null then
+    return 0;
+  end if;
+  for r in select id from public.project_invitations where email = v_email and user_id is null loop
+    perform public.apply_invitation(r.id, v_uid);
+    n := n + 1;
+  end loop;
+  return n;
+end;
+$$;
+
+-- Invite une adresse sur des lots du projet. Renvoie 'sent', ou 'example' pour un projet exemple (rien n'est envoyé).
+create or replace function public.invite_company(p_project uuid, p_email text, p_lots uuid[])
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_project public.projects;
+  v_email text := lower(trim(coalesce(p_email, '')));
+  v_lots uuid[];
+  v_inv uuid;
+  v_user uuid;
+begin
+  select * into v_project from public.projects where id = p_project;
+  if v_project.id is null or not public.is_project_owner(p_project) then
+    raise exception 'invite_forbidden';
+  end if;
+  if v_project.locked_at is not null then
+    raise exception 'project_locked';
+  end if;
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]{2,}$' or length(v_email) > 200 then
+    raise exception 'invite_email';
+  end if;
+  select array_agg(id) into v_lots from public.lots where project_id = p_project and id = any (coalesce(p_lots, '{}'));
+  if v_lots is null then
+    raise exception 'invite_no_lot';
+  end if;
+  if v_project.is_example then
+    return 'example';
+  end if;
+  if exists (select 1 from auth.users where id = auth.uid() and lower(email) = v_email) then
+    raise exception 'invite_self';
+  end if;
+  -- Garde-fou contre l'envoi en masse : 40 invitations par heure et par acheteur
+  if (select count(*) from public.project_invitations where invited_by = auth.uid() and updated_at > now() - interval '1 hour') >= 40 then
+    raise exception 'invite_limit';
+  end if;
+  insert into public.project_invitations (project_id, email, lot_ids, invited_by)
+  values (p_project, v_email, v_lots, auth.uid())
+  on conflict (project_id, email) do update
+    set lot_ids = (select array_agg(distinct x) from unnest(public.project_invitations.lot_ids || excluded.lot_ids) x),
+        invited_by = excluded.invited_by, emailed_at = null, updated_at = now()
+  returning id into v_inv;
+  select id into v_user from auth.users where lower(email) = v_email and email_confirmed_at is not null limit 1;
+  if v_user is not null then
+    perform public.apply_invitation(v_inv, v_user);
+  end if;
+  if exists (select 1 from pg_extension where extname = 'pg_net') then
+    perform net.http_post(
+      url := 'https://uhdanxctslncwwmcziba.supabase.co/functions/v1/notify-email',
+      body := jsonb_build_object('invitation', v_inv),
+      headers := '{"Content-Type": "application/json"}'::jsonb
+    );
+  end if;
+  return 'sent';
+end;
+$$;
+
+-- Publication d'un lot : les entreprises déjà acceptées (invitées pendant le brouillon) sont prévenues
+-- par une alerte et un e-mail ; les invitations pas encore rattachées à un compte sont renvoyées.
+create or replace function public.notify_lot_published()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_project public.projects;
+  v_buyer public.profiles;
+  r record;
+begin
+  if not (new.status = 'published' and old.status = 'draft') then
+    return new;
+  end if;
+  select * into v_project from public.projects where id = new.project_id;
+  if v_project.is_example then
+    return new;
+  end if;
+  select * into v_buyer from public.profiles where id = v_project.owner_id;
+  insert into public.notifications (user_id, kind, project_id, lot_id, actor_id, data)
+  select a.user_id, 'lot_published', v_project.id, new.id, v_project.owner_id, jsonb_build_object(
+    'project', v_project.name, 'lot', new.name,
+    'buyer', coalesce(nullif(v_buyer.company_name, ''), 'L''acheteur'),
+    'contact', trim(coalesce(v_buyer.first_name, '') || ' ' || coalesce(v_buyer.last_name, '')),
+    'email', v_buyer.email, 'due', to_char(new.due_date, 'DD/MM/YYYY'))
+  from public.lot_access a where a.lot_id = new.id and a.status = 'approved';
+  if exists (select 1 from pg_extension where extname = 'pg_net') then
+    for r in update public.project_invitations set emailed_at = null, updated_at = now()
+             where project_id = new.project_id and user_id is null and new.id = any (lot_ids)
+               and (emailed_at is null or emailed_at < now() - interval '1 hour')
+             returning id loop
+      perform net.http_post(
+        url := 'https://uhdanxctslncwwmcziba.supabase.co/functions/v1/notify-email',
+        body := jsonb_build_object('invitation', r.id),
+        headers := '{"Content-Type": "application/json"}'::jsonb
+      );
+    end loop;
+  end if;
+  return new;
+exception when others then
+  return new; -- une alerte qui échoue ne doit jamais empêcher la publication
+end;
+$$;
+
+drop trigger if exists lots_published_notify on public.lots;
+create trigger lots_published_notify
+  after update of status on public.lots
+  for each row execute function public.notify_lot_published();
+
+alter table public.project_invitations enable row level security;
+drop policy if exists project_invitations_owner_read on public.project_invitations;
+create policy project_invitations_owner_read on public.project_invitations
+  for select to authenticated using (public.is_project_owner(project_id));
+revoke all on public.project_invitations from anon, authenticated;
+grant select on public.project_invitations to authenticated;
+revoke all on function public.apply_invitation(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.notify_lot_published() from public, anon, authenticated;
+revoke all on function public.claim_invitations() from public, anon;
+grant execute on function public.claim_invitations() to authenticated;
+revoke all on function public.invite_company(uuid, text, uuid[]) from public, anon;
+grant execute on function public.invite_company(uuid, text, uuid[]) to authenticated;

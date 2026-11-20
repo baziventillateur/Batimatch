@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { InviteCompanyDialog } from '../components/InviteCompany'
+import type { InvitationRow } from '../data/rows'
 import { ProjectLockDialog, type LockMode } from '../components/ProjectLock'
 import { REFRESH_EVENT } from '../components/Bell'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Check, ChevronLeft, ChevronRight, Clock, Copy, CopyPlus, LockOpen, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, UserMinus, X } from 'lucide-react'
+import { MailPlus, Check, ChevronLeft, ChevronRight, Clock, Copy, CopyPlus, LockOpen, EyeOff, Lock, Mail, MoreHorizontal, PauseCircle, Pencil, Phone, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, UserMinus, X } from 'lucide-react'
 import { api, errorMessage } from '../data'
 import { useAuth } from '../data/auth'
 import type { ProjectBundle } from '../data/backend'
@@ -435,6 +437,15 @@ function LotRow({ b, lotId, reload }: { b: ProjectBundle; lotId: string; reload:
 function Companies({ b, reload }: { b: ProjectBundle; reload: () => void }) {
   const [view, setView] = useState<'access' | 'members' | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [inviting, setInviting] = useState(false)
+  const [invitations, setInvitations] = useState<InvitationRow[]>([])
+  const loadInvitations = useCallback(() => {
+    api.listInvitations(b.project.id).then(setInvitations, () => {})
+  }, [b.project.id])
+  useEffect(loadInvitations, [loadInvitations])
+  // En attente : l'entreprise invitée ne s'est pas encore connectée
+  const waiting = invitations.filter((i) => !i.user_id)
+  const canInvite = !b.project.locked_at && b.lots.length > 0
   const order: Record<AccessStatus, number> = { pending: 0, approved: 1, declined: 1, refused: 1 }
   const rows = [...b.access].sort((x, y) => order[x.status] - order[y.status] || (y.decided_at ?? y.requested_at).localeCompare(x.decided_at ?? x.requested_at))
   const pending = rows.filter((r) => r.status === 'pending').length
@@ -473,6 +484,11 @@ function Companies({ b, reload }: { b: ProjectBundle; reload: () => void }) {
             {pending} demande{pending > 1 ? 's' : ''} à traiter
           </span>
         )}
+        {canInvite && (
+          <Button size="sm" className="ml-auto font-sans" icon={<MailPlus size={15} />} onClick={() => setInviting(true)}>
+            Inviter
+          </Button>
+        )}
       </h2>
       <div className="panel overflow-hidden">
         {/* Parcours : chaque étape ouvre le détail */}
@@ -488,8 +504,19 @@ function Companies({ b, reload }: { b: ProjectBundle; reload: () => void }) {
           ))}
         </ol>
 
+        {waiting.length > 0 && (
+          <p className="flex items-start gap-2 border-b border-line-2 bg-plan-soft/40 px-3 py-1.5 text-[0.8438rem] leading-snug sm:px-5">
+            <MailPlus size={15} className="mt-0.5 shrink-0 text-plan" />
+            <span className="min-w-0">
+              <strong className="font-semibold">
+                {waiting.length} invitation{waiting.length > 1 ? 's' : ''} en attente de connexion
+              </strong>
+              <span className="text-ink-2"> : {waiting.slice(0, 3).map((i) => `${i.email} (${i.lot_ids.length} lot${i.lot_ids.length > 1 ? 's' : ''})`).join(', ')}{waiting.length > 3 ? `, et ${waiting.length - 3} autre${waiting.length > 4 ? 's' : ''}` : ''}</span>
+            </span>
+          </p>
+        )}
         {b.members.length === 0 ? (
-          <p className="px-4 py-3 text-[0.9062rem] text-ink-2 sm:px-5">Aucune entreprise n’a encore rejoint le projet. Partagez le code ci-dessus.</p>
+          <p className="px-4 py-3 text-[0.9062rem] text-ink-2 sm:px-5">Aucune entreprise n’a encore rejoint le projet. Invitez-les par e-mail ou partagez le code ci-dessus.</p>
         ) : rows.length === 0 ? (
           <p className="px-4 py-3 text-[0.9062rem] text-ink-2 sm:px-5">Aucune demande d’accès à un lot pour l’instant.</p>
         ) : (
@@ -537,6 +564,13 @@ function Companies({ b, reload }: { b: ProjectBundle; reload: () => void }) {
         )}
       </div>
 
+      <InviteCompanyDialog
+        open={inviting}
+        onClose={() => setInviting(false)}
+        projectId={b.project.id}
+        lots={b.lots.map((l) => ({ id: l.id, name: l.name, due_date: l.due_date, status: l.status ?? 'published' }))}
+        onSent={() => (loadInvitations(), reload())}
+      />
       <Dialog open={view != null} onClose={() => setView(null)} title="Entreprises du projet" wide>
         {view && (
           <div className="flex flex-col gap-2">

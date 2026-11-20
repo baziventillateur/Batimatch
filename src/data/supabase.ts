@@ -1,6 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Backend, OfferLite, ProjectBundle, ProjectListItem } from './backend'
-import type { NotificationRow, SsoRequestRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+import type { InvitationRow, NotificationRow, SsoRequestRow, CommentRow, LotAccessRow, LotCatalogItem, LotPrivateRow, LotRow, MemberRow, OfferRow, ProfileRow, ProjectRow, ReviewRow } from './rows'
+
+/** Compte pour lequel les invitations ont déjà été rattachées pendant cette visite */
+let claimedFor: string | null = null
 
 // Adresse et clé publique du projet Supabase. La clé « publishable » est faite pour être
 // embarquée dans l'application : la sécurité repose sur les règles RLS de la base.
@@ -94,6 +97,12 @@ export function createSupabaseBackend(): Backend {
     },
 
     async listProjects() {
+      // Invitations reçues à l'adresse du compte : les lots sont ouverts à la première visite
+      const { data: me } = await sb.auth.getUser()
+      if (me.user && claimedFor !== me.user.id) {
+        claimedFor = me.user.id
+        await sb.rpc('claim_invitations').then(() => {}, () => {})
+      }
       const projects = check(await sb.from('projects').select('*').order('created_at', { ascending: false })) as ProjectRow[]
       if (!projects.length) return []
       const ids = projects.map((p) => p.id)
@@ -204,6 +213,13 @@ export function createSupabaseBackend(): Backend {
     async undeclineLot(lotId) {
       const { data } = await sb.auth.getUser()
       check(await sb.from('lot_access').update({ status: 'approved', comment: null, decided_at: new Date().toISOString() }).eq('lot_id', lotId).eq('user_id', data.user?.id ?? ''))
+    },
+    async inviteCompany(projectId, email, lotIds) {
+      return check(await sb.rpc('invite_company', { p_project: projectId, p_email: email, p_lots: lotIds })) as 'sent' | 'example'
+    },
+    async listInvitations(projectId) {
+      const { data, error } = await sb.from('project_invitations').select('id, project_id, email, lot_ids, user_id, created_at, updated_at').eq('project_id', projectId).order('updated_at', { ascending: false })
+      return error ? [] : ((data ?? []) as InvitationRow[])
     },
     async remindCompany(lotId, userId) {
       return check(await sb.rpc('remind_company', { p_lot: lotId, p_user: userId })) as 'sent' | 'example'
