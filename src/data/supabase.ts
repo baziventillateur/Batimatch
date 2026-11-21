@@ -214,6 +214,22 @@ export function createSupabaseBackend(): Backend {
       const { data } = await sb.auth.getUser()
       check(await sb.from('lot_access').update({ status: 'approved', comment: null, decided_at: new Date().toISOString() }).eq('lot_id', lotId).eq('user_id', data.user?.id ?? ''))
     },
+    async importDpgfFile(lotId, file) {
+      const data = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(String(r.result).split(',')[1] ?? '')
+        r.onerror = () => reject(new Error('ai_unreadable'))
+        r.readAsDataURL(file)
+      })
+      const { data: out, error } = await sb.functions.invoke('dpgf-import', { body: { lot_id: lotId, name: file.name, data } })
+      if (error) {
+        // Le code d'erreur est dans le corps de la réponse de la fonction
+        const ctx = (error as { context?: Response }).context
+        const code = ctx && typeof ctx.json === 'function' ? await ctx.json().then((j: { error?: string }) => j?.error, () => null) : null
+        throw new Error(code || 'ai_failed')
+      }
+      return out as { rows: string[][]; truncated: boolean; left: number }
+    },
     async inviteCompany(projectId, email, lotIds) {
       return check(await sb.rpc('invite_company', { p_project: projectId, p_email: email, p_lots: lotIds })) as 'sent' | 'example'
     },

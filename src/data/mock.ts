@@ -449,6 +449,25 @@ export function createMockBackend(): Backend {
       save()
       await delay(null)
     },
+    async importDpgfFile(lotId, file) {
+      guard(lotProject(lotId))
+      if (!/\.(pdf|xlsx?|xlsm|csv)$/i.test(file.name)) throw new Error('ai_format')
+      // Démonstration : pas d'IA, un extrait type est renvoyé
+      await new Promise((r) => setTimeout(r, 1800))
+      return {
+        rows: [
+          ['1', 'Installations de chantier', '', ''],
+          ['1.1', 'Installation, clôtures et signalisation de chantier', 'ft', '1'],
+          ['1.2', 'Constat d’huissier et référés préventifs', 'ens', '1'],
+          ['2', 'Terrassements', '', ''],
+          ['2.1', 'Décapage de terre végétale sur 30 cm', 'm2', '1240'],
+          ['2.2', 'Déblais en masse, évacuation en décharge', 'm3', '1850,5'],
+          ['2.3', 'Remblai en GNT 0/31,5 compacté', 'm3', '640'],
+        ],
+        truncated: false,
+        left: 14,
+      }
+    },
     async inviteCompany(projectId, email, lotIds) {
       const p = db.projects.find((x) => x.id === projectId)
       if (!p || !isOwner(projectId)) throw new Error('invite_forbidden')

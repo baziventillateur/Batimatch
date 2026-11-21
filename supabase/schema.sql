@@ -1526,3 +1526,21 @@ revoke all on function public.claim_invitations() from public, anon;
 grant execute on function public.claim_invitations() to authenticated;
 revoke all on function public.invite_company(uuid, text, uuid[]) from public, anon;
 grant execute on function public.invite_company(uuid, text, uuid[]) to authenticated;
+
+-- ─── Import d'un DPGF par IA (bêta) ─────────────────────────────────────────
+-- Journal des imports : il sert de compteur (15 par compte et par 24 h) et de suivi de consommation.
+-- Écrit et lu uniquement par la fonction « dpgf-import » (clé de service) : aucune règle d'accès.
+create table if not exists public.ai_imports (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  lot_id uuid references public.lots (id) on delete set null,
+  file_name text not null default '',
+  bytes integer,
+  lines integer,
+  input_tokens integer,
+  output_tokens integer,
+  created_at timestamptz not null default now()
+);
+create index if not exists ai_imports_user_idx on public.ai_imports (user_id, created_at desc);
+alter table public.ai_imports enable row level security;
+revoke all on public.ai_imports from anon, authenticated;

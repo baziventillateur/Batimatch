@@ -101,6 +101,8 @@ export interface Backend {
   undeclineLot(lotId: string): Promise<void>
   /** Acheteur : relance par e-mail une entreprise acceptée qui n'a pas encore répondu. « example » : projet exemple, rien n'est envoyé. */
   remindCompany(lotId: string, userId: string): Promise<'sent' | 'example'>
+  /** Acheteur (bêta) : fait lire un DPGF PDF ou Excel par l'IA. Renvoie les lignes [N°, désignation, unité, quantité]. */
+  importDpgfFile(lotId: string, file: File): Promise<{ rows: string[][]; truncated: boolean; left: number }>
   /** Acheteur : invite une adresse e-mail sur des lots du projet (e-mail avec le lien pour répondre) */
   inviteCompany(projectId: string, email: string, lotIds: string[]): Promise<'sent' | 'example'>
   /** Acheteur : invitations envoyées sur le projet */
@@ -139,6 +141,16 @@ export function errorMessage(e: unknown): string {
   if (/sso_busy/.test(raw)) return 'Trop de demandes en ce moment. Réessayez dans une heure ou écrivez à contact@paceapp.fr.'
   if (/sso_email/.test(raw)) return 'Cette adresse e-mail ne semble pas valide.'
   if (/sso_company|sso_contact/.test(raw)) return 'Indiquez le nom de l’entreprise et celui du contact.'
+  if (/ai_not_configured/.test(raw)) return 'L’import par IA n’est pas encore activé sur Batimatch.'
+  if (/ai_quota/.test(raw)) return 'Limite atteinte : 15 imports par IA par 24 heures. Réessayez demain, ou collez le DPGF depuis Excel.'
+  if (/ai_too_big/.test(raw)) return 'Ce fichier est trop volumineux pour l’import par IA (7 Mo ou environ 100 pages au maximum). Découpez-le par lot.'
+  if (/ai_format/.test(raw)) return 'Format non pris en charge : déposez un PDF, un Excel (.xlsx, .xls) ou un CSV.'
+  if (/ai_unreadable/.test(raw)) return 'Ce fichier n’a pas pu être lu. Vérifiez qu’il s’ouvre bien et qu’il n’est pas protégé par mot de passe.'
+  if (/ai_no_dpgf/.test(raw)) return 'Aucune ligne de DPGF trouvée dans ce document.'
+  if (/ai_timeout/.test(raw)) return 'Le document est trop long à lire : découpez-le par lot et réessayez.'
+  if (/ai_busy/.test(raw)) return 'Le service d’IA est très sollicité : réessayez dans une minute.'
+  if (/ai_forbidden|ai_auth/.test(raw)) return 'Action réservée à l’acheteur du projet.'
+  if (/ai_failed|ai_request/.test(raw)) return 'L’import par IA a échoué. Réessayez, ou collez le DPGF depuis Excel.'
   if (/invite_email/.test(raw)) return 'Cette adresse e-mail n’est pas valide.'
   if (/invite_no_lot/.test(raw)) return 'Choisissez au moins un lot.'
   if (/invite_self/.test(raw)) return 'C’est votre propre adresse : invitez celle de l’entreprise.'

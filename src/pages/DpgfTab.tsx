@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
-import {
+import { Sparkles, FileUp,
   ArrowDown,
   ArrowUp,
   ClipboardPaste,
@@ -12,6 +12,7 @@ import {
   Repeat,
   Trash2,
 } from 'lucide-react'
+import { api, errorMessage } from '../data'
 import { useC } from './ConsultationLayout'
 import { newItem, useStore } from '../store'
 import { linesOf } from '../lib/calc'
@@ -19,7 +20,7 @@ import { UNITS, guessDpgfColumns, rowsToItems, splitClipboard, type ColumnRole }
 import { exportBlankDpgf } from '../lib/io'
 import { fmtEur } from '../lib/format'
 import type { DpgfItem } from '../lib/types'
-import { AnimatedNumber, Button, Descriptif, Dialog, EmptyState, Menu, MenuItem, NumberInput, Segmented, Toggle, cx } from '../components/ui'
+import { AnimatedNumber, Button, Descriptif, Dialog, EmptyState, Menu, MenuItem, NumberInput, Progress, Segmented, Toggle, cx } from '../components/ui'
 
 /** Propose le numéro suivant : « 2.3 » → « 2.4 », « PSE 1 » → « PSE 2 » */
 function nextRef(prev: string | undefined, kind: DpgfItem['kind'], items: DpgfItem[]): string {
@@ -63,6 +64,22 @@ export default function DpgfTab() {
   const setItems = useStore((s) => s.setItems)
   const updateConsultation = useStore((s) => s.updateConsultation)
   const [pasting, setPasting] = useState(false)
+  // Lignes extraites d'un fichier par l'IA, à relire dans le dialogue de collage
+  const [aiText, setAiText] = useState<string | null>(null)
+  const [aiOpen, setAiOpen] = useState(false)
+  const closePaste = () => (setPasting(false), setAiText(null))
+  const aiDialog = (
+    <AiImportDialog
+      open={aiOpen}
+      lotId={c.id}
+      onClose={() => setAiOpen(false)}
+      onRows={(text) => {
+        setAiOpen(false)
+        setAiText(text)
+        setPasting(true)
+      }}
+    />
+  )
   const [focusId, setFocusId] = useState<string | null>(null)
   const [addedId, setAddedId] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -136,6 +153,9 @@ export default function DpgfTab() {
               <Button variant="primary" icon={<ClipboardPaste size={17} />} onClick={() => setPasting(true)}>
                 Coller depuis Excel
               </Button>
+              <Button icon={<Sparkles size={17} />} onClick={() => setAiOpen(true)}>
+                Importer un PDF ou un Excel <BetaBadge />
+              </Button>
               <Button icon={<Heading size={17} />} onClick={() => add('chapter')}>
                 Commencer par un chapitre
               </Button>
@@ -146,9 +166,10 @@ export default function DpgfTab() {
           }
         >
           Copiez les colonnes N°, désignation, unité et quantité de votre DPGF Excel, puis collez-les : Batimatch reconnaît les
-          colonnes et crée les chapitres.
+          colonnes et crée les chapitres. Ou déposez le fichier (PDF ou Excel) : l’IA en extrait les lignes, vous les relisez avant d’importer.
         </EmptyState>
-        <PasteDpgfDialog open={pasting} onClose={() => setPasting(false)} hasItems={false} onImport={(items) => setItems(c.id, items)} />
+        <PasteDpgfDialog open={pasting} onClose={closePaste} initialText={aiText} hasItems={false} onImport={(items) => setItems(c.id, items)} />
+        {aiDialog}
       </>
     )
   }
@@ -168,6 +189,9 @@ export default function DpgfTab() {
         <div className="flex flex-wrap gap-2">
           <Button size="sm" icon={<ClipboardPaste size={15} />} onClick={() => setPasting(true)}>
             Coller depuis Excel
+          </Button>
+          <Button size="sm" icon={<Sparkles size={15} />} onClick={() => setAiOpen(true)}>
+            Importer un fichier <BetaBadge />
           </Button>
           <Button size="sm" icon={<ListOrdered size={15} />} onClick={() => setItems(c.id, renumber(c.items))}>
             Renuméroter
@@ -347,11 +371,13 @@ export default function DpgfTab() {
 
       <PasteDpgfDialog
         open={pasting}
-        onClose={() => setPasting(false)}
+        onClose={closePaste}
+        initialText={aiText}
         hasItems={c.items.length > 0}
         canReplace={c.offers.length === 0}
         onImport={(items, replace) => (replace ? setItems(c.id, items) : insertItems(c.id, items, null))}
       />
+      {aiDialog}
     </div>
   )
 }
@@ -364,7 +390,10 @@ function PasteDpgfDialog({
   onImport,
   hasItems,
   canReplace = true,
+  initialText,
 }: {
+  /** Tableau déjà extrait (import par IA) : il remplit la zone de collage, à relire */
+  initialText?: string | null
   open: boolean
   onClose: () => void
   onImport: (items: DpgfItem[], replace: boolean) => void
@@ -372,6 +401,10 @@ function PasteDpgfDialog({
   canReplace?: boolean
 }) {
   const [text, setText] = useState('')
+  const fromAi = !!initialText
+  useEffect(() => {
+    if (open && initialText) setText(initialText)
+  }, [open, initialText])
   const [roles, setRoles] = useState<ColumnRole[] | null>(null)
   const [chapters, setChapters] = useState(true)
   const [mode, setMode] = useState<'append' | 'replace'>('append')
@@ -391,7 +424,7 @@ function PasteDpgfDialog({
     <Dialog
       open={open}
       onClose={close}
-      title="Coller le DPGF depuis Excel"
+      title={fromAi ? 'Relire le DPGF extrait par l’IA' : 'Coller le DPGF depuis Excel'}
       wide
       footer={
         <>
@@ -412,11 +445,20 @@ function PasteDpgfDialog({
       }
     >
       <div className="grid gap-4">
-        <p className="text-[0.875rem] text-ink-2">
-          Dans Excel, sélectionnez les colonnes N°, désignation, unité et quantité (sans les prix), copiez, puis collez ici.
-        </p>
+        {fromAi ? (
+          <p className="flex items-start gap-2 rounded-md bg-plan-soft/60 px-3 py-2 text-[0.875rem]">
+            <Sparkles size={16} className="mt-0.5 shrink-0 text-plan" />
+            <span>
+              Lignes extraites par l’IA <BetaBadge /> : une IA peut se tromper. Contrôlez les quantités et les unités dans l’aperçu avant d’importer ; vous pouvez corriger le texte ci-dessous.
+            </span>
+          </p>
+        ) : (
+          <p className="text-[0.875rem] text-ink-2">
+            Dans Excel, sélectionnez les colonnes N°, désignation, unité et quantité (sans les prix), copiez, puis collez ici.
+          </p>
+        )}
         <textarea
-          autoFocus
+          autoFocus={!fromAi}
           rows={text ? 4 : 7}
           className="field num resize-y text-[0.8438rem]"
           placeholder={'1\tTerrassements\n1.1\tDéblais en masse\tm3\t1850\n1.2\tRemblai GNT 0/31,5\tm3\t640'}
@@ -493,6 +535,110 @@ function PasteDpgfDialog({
           </>
         )}
       </div>
+    </Dialog>
+  )
+}
+
+/** Pastille « Bêta » des fonctions encore en rodage */
+function BetaBadge() {
+  return <span className="ml-1 inline-block rounded-[3px] bg-marker px-1 py-px align-[1px] text-[0.625rem] leading-tight font-bold tracking-wide text-night uppercase">Bêta</span>
+}
+
+const AI_ACCEPT = '.pdf,.xlsx,.xls,.xlsm,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv'
+
+/** Dépôt d'un DPGF PDF ou Excel : l'IA en extrait les lignes, relues ensuite dans le dialogue de collage */
+function AiImportDialog({ open, lotId, onClose, onRows }: { open: boolean; lotId: string; onClose: () => void; onRows: (text: string) => void }) {
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [over, setOver] = useState(false)
+  const [secs, setSecs] = useState(0)
+  useEffect(() => {
+    if (!busy) return
+    setSecs(0)
+    const t = setInterval(() => setSecs((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [busy])
+  useEffect(() => {
+    if (!open) {
+      setFile(null)
+      setError(null)
+      setBusy(false)
+    }
+  }, [open])
+
+  const run = async (f: File) => {
+    setFile(f)
+    setError(null)
+    if (f.size > 7 * 1024 * 1024) return setError(errorMessage(new Error('ai_too_big')))
+    setBusy(true)
+    try {
+      const out = await api.importDpgfFile(lotId, f)
+      onRows(out.rows.map((r) => r.join('\t')).join('\n'))
+    } catch (e) {
+      setError(errorMessage(e))
+    }
+    setBusy(false)
+  }
+  const STEPS = ['Envoi du fichier', 'Lecture du document par l’IA', 'Repérage des chapitres et des lignes', 'Contrôle des unités et des quantités']
+  const step = Math.min(STEPS.length - 1, Math.floor(secs / 9))
+
+  return (
+    <Dialog open={open} onClose={busy ? () => {} : onClose} title="Importer un DPGF par IA (bêta)">
+      {busy ? (
+        <div className="flex flex-col items-center gap-3 py-4 text-center" role="status">
+          <span className="relative grid size-12 place-items-center rounded-full bg-plan-soft text-plan">
+            <Sparkles size={22} className="animate-pulse" />
+          </span>
+          <p className="font-semibold">{STEPS[step]}…</p>
+          <p className="max-w-[34ch] text-[0.8438rem] text-ink-2">
+            « {file?.name} » : comptez de 20 secondes à 2 minutes selon la longueur du document. Gardez cette fenêtre ouverte.
+          </p>
+          <Progress value={Math.min(0.95, secs / 90)} className="max-w-[16rem]" />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <label
+            onDragOver={(e) => (e.preventDefault(), setOver(true))}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setOver(false)
+              const f = e.dataTransfer.files?.[0]
+              if (f) run(f)
+            }}
+            className={cx(
+              'flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors',
+              over ? 'border-plan bg-plan-soft/60' : 'border-line hover:border-plan/60 hover:bg-paper',
+            )}
+          >
+            <FileUp size={26} className="text-plan" />
+            <span className="font-semibold">Choisir un fichier</span>
+            <span className="text-[0.8438rem] text-ink-2">PDF, Excel (.xlsx, .xls) ou CSV, 7 Mo maximum</span>
+            <input
+              type="file"
+              accept={AI_ACCEPT}
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                e.target.value = ''
+                if (f) run(f)
+              }}
+            />
+          </label>
+          {error && (
+            <p className="rounded-md bg-bad-soft px-3 py-2 text-[0.875rem] text-bad" role="alert">
+              {error}
+            </p>
+          )}
+          <ul className="list-disc space-y-0.5 pl-5 text-[0.8125rem] leading-snug text-ink-2">
+            <li>L’IA repère les chapitres, les désignations, les unités et les quantités ; les prix sont ignorés.</li>
+            <li>Rien n’est importé d’office : vous relisez et corrigez le résultat avant de valider.</li>
+            <li>Le fichier est envoyé à Anthropic (Claude) pour être lu ; il n’est pas conservé par Batimatch.</li>
+            <li>Fonction en bêta : 15 imports par 24 heures.</li>
+          </ul>
+        </div>
+      )}
     </Dialog>
   )
 }
